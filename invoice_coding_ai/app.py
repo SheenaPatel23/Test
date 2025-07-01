@@ -3,23 +3,38 @@ import pandas as pd
 import os
 import requests
 import fitz  # PyMuPDF
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+st.title("🧾 Invoice Coding AI with Chart of Accounts")
+st.markdown("""
+Upload your **invoices** (CSV, Excel, or PDF) and your **Chart of Accounts** file (Excel).
+The AI will return coded recommendations based on your company's nominal accounts.
+""")
 
-# App title
-st.title("🧾 Invoice Coding AI")
-st.markdown("Upload your **sales or purchase invoices** (CSV, Excel, or PDF) and get **coded recommendations** using AI.")
+# Get API key from Streamlit secrets
+try:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+except KeyError:
+    st.error("GROQ_API_KEY not found in Streamlit Secrets. Please add it under Secrets & Variables.")
+    st.stop()
 
-# File uploader
+# Upload Chart of Accounts
+coa_file = st.file_uploader("Upload Chart of Accounts Excel file", type=["xlsx"])
+coa_df = None
+if coa_file:
+    try:
+        coa_df = pd.read_excel(coa_file, engine="openpyxl")
+        st.subheader("📁 Chart of Accounts Preview")
+        st.dataframe(coa_df.head(10))
+    except Exception as e:
+        st.error(f"Error reading Chart of Accounts file: {e}")
+        st.stop()
+
+# Upload invoice file
 uploaded_file = st.file_uploader("Upload Invoice File (CSV, Excel, or PDF)", type=["csv", "xlsx", "pdf"])
 
 df = None
 pdf_text = ""
 
-# Data preview
 if uploaded_file:
     try:
         if uploaded_file.name.endswith(".csv"):
@@ -32,36 +47,51 @@ if uploaded_file:
             st.subheader("📄 Extracted PDF Text")
             st.text_area("PDF Content", pdf_text, height=300)
         if df is not None:
-            st.subheader("📊 Data Preview")
+            st.subheader("📊 Invoice Data Preview")
             st.dataframe(df)
     except Exception as e:
-        st.error(f"Error reading file: {e}")
+        st.error(f"Error reading invoice file: {e}")
         st.stop()
 else:
-    st.info("Please upload a file to begin.")
+    st.info("Please upload an invoice file to begin.")
 
-# Action button
-if uploaded_file and st.button("🔍 Run AI Analysis"):
-    if not GROQ_API_KEY:
-        st.error("GROQ_API_KEY not found. Please set it in the .env file or Streamlit secrets.")
+if st.button("🔍 Run AI Analysis"):
+    if not uploaded_file:
+        st.error("Please upload an invoice file to analyze.")
         st.stop()
 
-    # Prepare prompt
+    if coa_df is None:
+        st.error("Please upload a valid Chart of Accounts Excel file.")
+        st.stop()
+
+    # Prepare invoice data snippet
     if df is not None:
         try:
             invoice_data = df.head(10).to_markdown(index=False)
         except ImportError:
-            # Fallback if tabulate is missing
             invoice_data = df.head(10).to_string(index=False)
     else:
-        invoice_data = pdf_text[:3000]  # Limit to first 3000 characters
+        invoice_data = pdf_text[:3000]  # Limit to first 3000 chars if PDF
+
+    # Prepare COA snippet for prompt context (first 10 rows)
+    try:
+        coa_sample = coa_df.head(10).to_markdown(index=False)
+    except ImportError:
+        coa_sample = coa_df.head(10).to_string(index=False)
 
     prompt = f"""
-You are a financial assistant. Based on the following invoice data, return a coded version of the invoice using a standard chart of accounts.
-Include account codes, descriptions, and any relevant notes or recommendations.
+You are a financial assistant AI.
 
-Invoice Data:
+Given the following Chart of Accounts used by the company:
+
+{coa_sample}
+
+And the invoice data below:
+
 {invoice_data}
+
+Please provide a coded version of the invoice using the Chart of Accounts.
+Include Shipsure Account Number, Description, and any relevant notes or recommendations.
 """
 
     # Call Groq API
@@ -73,7 +103,7 @@ Invoice Data:
                 "Content-Type": "application/json"
             },
             json={
-                "model": "mixtral-8x7b-32768",
+                "model": "llama3-8b-8192",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3
             }
@@ -84,16 +114,12 @@ Invoice Data:
             st.stop()
 
         result = response.json()
-        # Debug output to inspect full response if needed
-        # st.write(result)
-
         ai_output = result.get("choices", [{}])[0].get("message", {}).get("content", None)
 
         if not ai_output:
             st.error("No valid response content returned from API.")
             st.stop()
 
-        # Display result
         st.subheader("📥 AI-Coded Invoice Output")
         st.markdown(f"```markdown\n{ai_output}\n```")
 
