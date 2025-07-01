@@ -3,11 +3,9 @@ import pandas as pd
 import os
 import requests
 import fitz  # PyMuPDF
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Use secrets to load API key in Streamlit Cloud
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 # App title
 st.title("🧾 Invoice Coding AI")
@@ -31,9 +29,11 @@ if uploaded_file:
                 pdf_text = "\n".join(page.get_text() for page in doc)
             st.subheader("📄 Extracted PDF Text")
             st.text_area("PDF Content", pdf_text, height=300)
+
         if df is not None:
             st.subheader("📊 Data Preview")
             st.dataframe(df)
+
     except Exception as e:
         st.error(f"Error reading file: {e}")
         st.stop()
@@ -43,7 +43,7 @@ else:
 # Action button
 if uploaded_file and st.button("🔍 Run AI Analysis"):
     if not GROQ_API_KEY:
-        st.error("GROQ_API_KEY not found. Please set it in the .env file.")
+        st.error("🚨 GROQ_API_KEY not found. Please set it in Streamlit Secrets.")
         st.stop()
 
     # Prepare prompt
