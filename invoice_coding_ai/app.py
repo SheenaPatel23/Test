@@ -3,64 +3,77 @@ import pandas as pd
 import os
 import requests
 import fitz  # PyMuPDF
+from dotenv import load_dotenv
 
-# Use secrets to load API key in Streamlit Cloud
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+# Load environment variables
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# App title
 st.title("🧾 Invoice Coding AI")
-st.markdown("Upload your **sales or purchase invoices** (CSV, Excel, or PDF) and get **coded recommendations** using AI.")
+st.markdown("Upload an **invoice** and your **Chart of Accounts**, and receive AI-generated coding suggestions.")
 
-# File uploader
-uploaded_file = st.file_uploader("Upload Invoice File (CSV, Excel, or PDF)", type=["csv", "xlsx", "pdf"])
+# File uploaders
+invoice_file = st.file_uploader("Upload Invoice File (CSV, Excel, or PDF)", type=["csv", "xlsx", "pdf"])
+coa_file = st.file_uploader("Upload Chart of Accounts (Excel)", type=["xlsx"])
 
-df = None
+invoice_df = None
 pdf_text = ""
+coa_df = None
 
-# Data preview
-if uploaded_file:
+# Process invoice
+if invoice_file:
     try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith(".xlsx"):
-            df = pd.read_excel(uploaded_file, engine="openpyxl")
-        elif uploaded_file.name.endswith(".pdf"):
-            with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+        if invoice_file.name.endswith(".csv"):
+            invoice_df = pd.read_csv(invoice_file)
+        elif invoice_file.name.endswith(".xlsx"):
+            invoice_df = pd.read_excel(invoice_file)
+        elif invoice_file.name.endswith(".pdf"):
+            with fitz.open(stream=invoice_file.read(), filetype="pdf") as doc:
                 pdf_text = "\n".join(page.get_text() for page in doc)
             st.subheader("📄 Extracted PDF Text")
             st.text_area("PDF Content", pdf_text, height=300)
-
-        if df is not None:
-            st.subheader("📊 Data Preview")
-            st.dataframe(df)
-
+        if invoice_df is not None:
+            st.subheader("📊 Invoice Data Preview")
+            st.dataframe(invoice_df)
     except Exception as e:
-        st.error(f"Error reading file: {e}")
+        st.error(f"Error reading invoice file: {e}")
         st.stop()
-else:
-    st.info("Please upload a file to begin.")
 
-# Action button
-if uploaded_file and st.button("🔍 Run AI Analysis"):
+# Process Chart of Accounts
+if coa_file:
+    try:
+        coa_df = pd.read_excel(coa_file)
+        st.subheader("📘 Chart of Accounts Preview")
+        st.dataframe(coa_df.head(10))
+    except Exception as e:
+        st.error(f"Error reading Chart of Accounts: {e}")
+        st.stop()
+
+# AI button
+if invoice_file and coa_file and st.button("🚀 Run AI Coding"):
     if not GROQ_API_KEY:
-        st.error("🚨 GROQ_API_KEY not found. Please set it in Streamlit Secrets.")
+        st.error("🚨 GROQ_API_KEY is missing. Please set it in the .env file or Streamlit secrets.")
         st.stop()
 
-    # Prepare prompt
-    if df is not None:
-        invoice_data = df.head(10).to_markdown(index=False)
+    # Build prompt
+    if invoice_df is not None:
+        invoice_sample = invoice_df.head(10).to_markdown(index=False)
     else:
-        invoice_data = pdf_text[:3000]  # Limit to first 3000 characters
+        invoice_sample = pdf_text[:3000]
+
+    coa_sample = coa_df.head(10).to_markdown(index=False)
 
     prompt = f"""
-You are a financial assistant. Based on the following invoice data, return a coded version of the invoice using a standard chart of accounts.
-Include account codes, descriptions, and any relevant notes or recommendations.
+You are a finance assistant. Based on the following invoice and chart of accounts data, suggest a coded invoice breakdown.
+Include appropriate account numbers, descriptions, and any notes.
 
-Invoice Data:
-{invoice_data}
+📄 **Invoice Data**:
+{invoice_sample}
+
+📘 **Chart of Accounts**:
+{coa_sample}
 """
 
-    # Call Groq API
     try:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -77,7 +90,7 @@ Invoice Data:
         result = response.json()
         ai_output = result["choices"][0]["message"]["content"]
 
-        # Display result
+        # Show AI response
         st.subheader("📥 AI-Coded Invoice Output")
         st.markdown(f"```markdown\n{ai_output}\n```")
 
