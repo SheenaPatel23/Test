@@ -6,8 +6,9 @@ import os
 from groq import Groq
 from dotenv import load_dotenv
 from operator import attrgetter
+from io import BytesIO
 
-# Load API key securely
+# Load API key
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -15,74 +16,112 @@ if not GROQ_API_KEY:
     st.error("🚨 API Key is missing! Set it in Streamlit Secrets or a .env file.")
     st.stop()
 
-# Streamlit App UI
+st.set_page_config(layout="wide")
 st.title("🤖 FP&A AI Agent - SaaS Cohort Analysis")
-st.write("Upload an Excel file, analyze retention rates, and get AI-generated FP&A insights!")
 
-# File uploader
+st.markdown("Upload an Excel file, analyze retention, churn, and revenue growth by cohort, and get FP&A insights!")
+
 uploaded_file = st.file_uploader("📂 Upload your cohort data (Excel format)", type=["xlsx"])
 
 if uploaded_file:
-    # Read the Excel file
-    sales_data = pd.read_excel(uploaded_file)
+    df = pd.read_excel(uploaded_file)
+    df['Date'] = pd.to_datetime(df['Date'])
 
-    # Convert Date column to datetime
-    sales_data['Date'] = pd.to_datetime(sales_data['Date'])
+    # === Apply Filters ===
+    if "Business Unit" in df.columns and "Management Type" in df.columns:
+        st.subheader("🔍 Filter Options")
+        selected_bu = st.multiselect("Select Business Unit(s)", sorted(df["Business Unit"].dropna().unique()), default=None)
+        selected_mgmt = st.multiselect("Select Management Type(s)", sorted(df["Management Type"].dropna().unique()), default=None)
 
-    # Extract the first purchase month for each customer
-    sales_data['CohortMonth'] = sales_data.groupby('Customer_ID')['Date'].transform('min').dt.to_period('M')
+        if selected_bu:
+            df = df[df["Business Unit"].isin(selected_bu)]
+        if selected_mgmt:
+            df = df[df["Management Type"].isin(selected_mgmt)]
 
-    # Calculate month difference between the purchase date and the cohort month
-    sales_data['PurchaseMonth'] = sales_data['Date'].dt.to_period('M')
-    sales_data['CohortIndex'] = (sales_data['PurchaseMonth'] - sales_data['CohortMonth']).apply(attrgetter('n'))
+    # === Build Cohort Data ===
+    df['CohortMonth'] = df.groupby('Customer_ID')['Date'].transform('min').dt.to_period('M')
+    df['PurchaseMonth'] = df['Date'].dt.to_period('M')
+    df['CohortIndex'] = (df['PurchaseMonth'] - df['CohortMonth']).apply(attrgetter('n'))
 
-    # Create a pivot table for cohort analysis
-    cohort_counts = sales_data.pivot_table(index='CohortMonth', columns='CohortIndex', values='Customer_ID', aggfunc='nunique')
-
-    # Calculate retention rates
-    cohort_sizes = cohort_counts.iloc[:, 0]
-    retention_rate = cohort_counts.divide(cohort_sizes, axis=0)
-
-    # Display data preview
     st.subheader("📊 Data Preview")
-    st.dataframe(sales_data.head())
+    st.dataframe(df.head())
 
-    # Plot retention rate heatmap
-    st.subheader("🔥 Retention Rate Heatmap")
-    plt.figure(figsize=(16, 9))
+    # === Retention Matrix ===
+    retention_counts = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Customer_ID', aggfunc='nunique')
+    cohort_sizes = retention_counts.iloc[:, 0]
+    retention_rate = retention_counts.divide(cohort_sizes, axis=0)
+
+    st.subheader("🔥 Retention Heatmap")
+    plt.figure(figsize=(12, 6))
     sns.heatmap(retention_rate, annot=True, fmt=".0%", cmap="YlGnBu", linewidths=0.5)
-    plt.title('Cohort Analysis - Retention Rate', fontsize=16)
-    plt.xlabel('Months Since First Purchase', fontsize=12)
-    plt.ylabel('Cohort Month', fontsize=12)
-    plt.tight_layout()
     st.pyplot(plt)
 
-    # Prepare cohort summary for AI
-    cohort_summary = f"""
-    📌 **Cohort Analysis Summary**:
-    - Number of Cohorts: {len(cohort_counts)}
-    - Retention Rate Breakdown:
-    {retention_rate.to_string()}
-    """
+    # === Revenue Heatmap ===
+    if 'Revenue' in df.columns:
+        revenue_matrix = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Revenue', aggfunc='sum')
+        st.subheader("💰 Cohort Revenue Heatmap")
+        plt.figure(figsize=(12, 6))
+        sns.heatmap(revenue_matrix, annot=True, fmt=".0f", cmap="OrRd", linewidths=0.5)
+        st.pyplot(plt)
 
-    # AI Agent Section
-    st.subheader("🤖 AI Agent - FP&A Commentary")
+    # === Churn Report ===
+    st.subheader("📉 Customer Churn Report")
+    churn_df = retention_rate.copy()
+    churn_df = churn_df.fillna(0)
+    churn_df = churn_df.applymap(lambda x: 1 - x)
+    plt.figure(figsize=(12, 6))
+    sns.heatmap(churn_df, annot=True, fmt=".0%", cmap="Reds", linewidths=0.5)
+    plt.title("Churn Rate by Cohort", fontsize=14)
+    st.pyplot(plt)
 
-    # User Prompt Input
-    user_prompt = st.text_area("📝 Enter your question for the AI:", "Analyze the cohort retention data and provide key FP&A insights.")
+    # === Growth Cohort Breakdown ===
+    if 'Revenue' in df.columns:
+        st.subheader("📈 Growth Cohort Breakdown (Avg Revenue per Customer)")
+        avg_revenue_per_user = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Revenue', aggfunc='sum') / retention_counts
+        avg_revenue_per_user = avg_revenue_per_user.fillna(0)
+        plt.figure(figsize=(12, 6))
+        sns.heatmap(avg_revenue_per_user, annot=True, fmt=".0f", cmap="BuGn", linewidths=0.5)
+        plt.title("Average Revenue per Customer", fontsize=14)
+        st.pyplot(plt)
 
-    if st.button("🚀 Generate AI Commentary"):
+    # === Export Options ===
+    st.subheader("📥 Download Export Files")
+    csv_buffer = df.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Download Filtered Data (CSV)", data=csv_buffer, file_name="filtered_data.csv", mime="text/csv")
+
+    excel_buffer = BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+        retention_rate.to_excel(writer, sheet_name='Retention Rate')
+        churn_df.to_excel(writer, sheet_name='Churn Rate')
+        if 'Revenue' in df.columns:
+            revenue_matrix.to_excel(writer, sheet_name='Revenue')
+            avg_revenue_per_user.to_excel(writer, sheet_name='Avg Revenue/User')
+        writer.save()
+    st.download_button("⬇️ Download Cohort Matrices (Excel)", data=excel_buffer.getvalue(), file_name="cohort_analysis.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    # === AI Commentary Section ===
+    st.subheader("🤖 Ask the FP&A AI Agent")
+    user_prompt = st.text_area("Enter your question for the AI", "What insights can you derive from the retention, churn, and growth data?")
+
+    if st.button("🚀 Generate Insights"):
+        cohort_summary = f"""
+Cohort Retention (Sample):
+{retention_rate.head().to_string(index=True)}
+
+Churn Rate (Sample):
+{churn_df.head().to_string(index=True)}
+
+Average Revenue per User (Sample):
+{avg_revenue_per_user.head().to_string(index=True)}
+"""
         client = Groq(api_key=GROQ_API_KEY)
         response = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "You are an AI-powered FP&A analyst providing financial insights."},
-                {"role": "user", "content": f"The cohort retention analysis is summarized below:\n{cohort_summary}\n{user_prompt}"}
+                {"role": "system", "content": "You are an AI FP&A analyst providing insights from cohort, churn, and revenue analysis."},
+                {"role": "user", "content": f"{cohort_summary}\n{user_prompt}"}
             ],
             model="llama3-8b-8192",
         )
-
-        ai_commentary = response.choices[0].message.content
-
-        # Display AI commentary
-        st.subheader("💡 AI-Generated FP&A Insights")
-        st.write(ai_commentary)
+        ai_response = response.choices[0].message.content
+        st.subheader("💡 AI-Generated Insights")
+        st.markdown(ai_response)
