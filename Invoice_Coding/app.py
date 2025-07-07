@@ -1,38 +1,68 @@
 import streamlit as st
 import pandas as pd
 import os
-from fuzzywuzzy import process
 import pdfplumber
+from fuzzywuzzy import process
+from groq import Groq
 
 # --- Page Config ---
 st.set_page_config(page_title="Invoice Coding Tool", layout="wide")
-st.title("📊 Finance Invoice Coding Tool")
+st.title("📊 Finance Invoice Coding Tool with Groq LLM")
 
 st.markdown("""
-This app helps finance teams code invoices using the **Chart of Accounts** for **Shipsure** and **HFM**.
-Upload an invoice file to begin. The Chart of Accounts is preloaded from the repository.
+This app helps finance teams code invoices using the **Chart of Accounts**.
+Uses fuzzy matching and Groq LLM for intelligent account suggestions.
 """)
 
-# --- Load Chart of Accounts from local repo folder ---
+# --- Groq Setup ---
+groq_api_key = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=groq_api_key)
+
+# --- Load Chart of Accounts ---
 @st.cache_data
 def load_coa():
     coa_path = os.path.join(os.path.dirname(__file__), "coa_data", "chart_of_accounts.csv")
     return pd.read_csv(coa_path)
 
 coa = load_coa()
+coa_descriptions = coa['Shipsure Account Description'].dropna().tolist()
+
+# --- Groq LLM Suggestion ---
+def get_llm_suggestion(description, coa_options):
+    prompt = f"""
+You are a finance assistant. Based on the invoice description, select the most appropriate account from the Chart of Accounts below.
+
+Invoice Description:
+"{description}"
+
+Chart of Accounts Options:
+{chr(10).join(f"- {desc}" for desc in coa_options[:50])}
+
+Respond with only the **exact account description** that matches best.
+"""
+    try:
+        response = client.chat.completions.create(
+            model="mixtral-8x7b-32768",
+            messages=[
+                {"role": "system", "content": "You are a helpful finance assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2,
+            max_tokens=50,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"LLM Error: {e}"
 
 # --- File Upload ---
 st.sidebar.header("Step 1: Upload Invoice File")
 invoice_file = st.sidebar.file_uploader("Upload Invoice File (.xlsx, .csv, or .pdf)", type=["xlsx", "csv", "pdf"])
 
 if invoice_file:
-    # --- Read Invoice File ---
     if invoice_file.name.endswith(".xlsx"):
         invoices = pd.read_excel(invoice_file)
-
     elif invoice_file.name.endswith(".csv"):
         invoices = pd.read_csv(invoice_file)
-
     elif invoice_file.name.endswith(".pdf"):
         with pdfplumber.open(invoice_file) as pdf:
             all_tables = []
@@ -66,7 +96,6 @@ if invoice_file:
             st.warning("No tables found in the PDF.")
             st.stop()
 
-    # --- Show Chart of Accounts ---
     st.subheader("📘 Chart of Accounts (Preview)")
     st.dataframe(coa.head(), use_container_width=True)
 
@@ -79,13 +108,16 @@ if invoice_file:
         amount = row.get("Amount", 0)
         invoice_number = row.get("Invoice Number", f"Row {idx+1}")
 
-        # Suggest accounts using fuzzy match
-        suggestions = process.extract(description, coa['Shipsure Account Description'].fillna("").tolist(), limit=3)
+        # Fuzzy match
+        fuzzy_suggestions = process.extract(description, coa_descriptions, limit=3)
 
-        st.markdown(f"**Invoice {invoice_number} - {description[:50]}...**")
+        # Groq LLM match
+        llm_suggestion = get_llm_suggestion(description, coa_descriptions)
+
+        st.markdown(f"**Invoice {invoice_number} - {description[:60]}...**")
         selected = st.selectbox(
-            f"Select account for invoice {invoice_number}:",
-            options=[s[0] for s in suggestions],
+            f"Select fuzzy-matched account for invoice {invoice_number}:",
+            options=[s[0] for s in fuzzy_suggestions],
             index=0,
             key=f"select_{idx}"
         )
@@ -95,7 +127,8 @@ if invoice_file:
             "Invoice Number": invoice_number,
             "Description": description,
             "Amount": amount,
-            "Mapped Account": selected,
+            "Mapped Account (Fuzzy)": selected,
+            "Mapped Account (Groq LLM)": llm_suggestion,
             "Account Type": coa_row.get("Account Type", ""),
             "HFM Account Number": coa_row.get("HFM Account Number", ""),
             "HFM Description": coa_row.get("HFM Account Description", "")
@@ -104,15 +137,15 @@ if invoice_file:
     result_df = pd.DataFrame(coded_invoices)
 
     st.markdown("---")
-    st.subheader("✅ Final Coded Invoices")
+    st.subheader("✅ Final Coded Invoices (Groq-enhanced)")
     st.dataframe(result_df, use_container_width=True)
 
-    # --- Download Result ---
+    # --- Download Option ---
     csv = result_df.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="📥 Download Coded Invoices CSV",
         data=csv,
-        file_name="coded_invoices.csv",
+        file_name="coded_invoices_groq.csv",
         mime="text/csv"
     )
 
