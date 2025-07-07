@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from fuzzywuzzy import process
 import pdfplumber
-from unstructured.partition.pdf import partition_pdf
 import tempfile
 import os
 
@@ -35,30 +34,19 @@ if invoice_file:
         invoice_data = pd.read_csv(invoice_file)
     elif invoice_file.name.endswith(".pdf"):
         st.sidebar.subheader("PDF Parsing Method")
-        parse_method = st.sidebar.radio("Select method", ["pdfplumber (basic)", "Unstructured.io (ML-based)"])
-        if parse_method == "pdfplumber (basic)":
-            with pdfplumber.open(invoice_file) as pdf:
-                all_tables = []
-                for page in pdf.pages:
-                    tables = page.extract_tables()
-                    for table in tables:
-                        df = pd.DataFrame(table[1:], columns=table[0])
-                        all_tables.append(df)
-                if all_tables:
-                    invoice_data = pd.concat(all_tables, ignore_index=True)
-                else:
-                    st.warning("No tables found using pdfplumber.")
-        else:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                tmp_file.write(invoice_file.read())
-                tmp_path = tmp_file.name
-            elements = partition_pdf(filename=tmp_path)
-            os.remove(tmp_path)
-            tables = [el for el in elements if el.category == "Table"]
-            if tables:
-                invoice_data = tables[0].to_dataframe()
+        st.sidebar.info("Using pdfplumber (basic table extraction)")
+
+        with pdfplumber.open(invoice_file) as pdf:
+            all_tables = []
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for table in tables:
+                    df = pd.DataFrame(table[1:], columns=table[0])
+                    all_tables.append(df)
+            if all_tables:
+                invoice_data = pd.concat(all_tables, ignore_index=True)
             else:
-                st.warning("No tables found using Unstructured.io.")
+                st.warning("No tables found using pdfplumber.")
 
 # --- Display Uploaded Content ---
 if invoice_data is not None:
