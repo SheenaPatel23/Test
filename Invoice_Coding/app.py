@@ -14,9 +14,8 @@ This app helps finance teams code invoices using the **Chart of Accounts**.
 Uses fuzzy matching and Groq LLM for intelligent account suggestions.
 """)
 
-# --- Groq Setup ---
-groq_api_key = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=groq_api_key)
+# === Read API key from Streamlit Secrets ===
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 # --- Load Chart of Accounts ---
 @st.cache_data
