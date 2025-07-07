@@ -29,16 +29,29 @@ if invoice_file:
     # --- Read Invoice File ---
     if invoice_file.name.endswith(".xlsx"):
         invoices = pd.read_excel(invoice_file)
+
     elif invoice_file.name.endswith(".csv"):
         invoices = pd.read_csv(invoice_file)
+
     elif invoice_file.name.endswith(".pdf"):
         with pdfplumber.open(invoice_file) as pdf:
             all_tables = []
             for page in pdf.pages:
                 tables = page.extract_tables()
                 for table in tables:
-                    df = pd.DataFrame(table[1:], columns=table[0])
-                    all_tables.append(df)
+                    if table and len(table) > 1:
+                        headers = table[0]
+                        seen = {}
+                        unique_headers = []
+                        for h in headers:
+                            if h in seen:
+                                seen[h] += 1
+                                unique_headers.append(f"{h}_{seen[h]}")
+                            else:
+                                seen[h] = 0
+                                unique_headers.append(h)
+                        df = pd.DataFrame(table[1:], columns=unique_headers)
+                        all_tables.append(df)
 
         if all_tables:
             try:
@@ -53,6 +66,7 @@ if invoice_file:
             st.warning("No tables found in the PDF.")
             st.stop()
 
+    # --- Show Chart of Accounts ---
     st.subheader("📘 Chart of Accounts (Preview)")
     st.dataframe(coa.head(), use_container_width=True)
 
@@ -61,7 +75,7 @@ if invoice_file:
 
     coded_invoices = []
     for idx, row in invoices.iterrows():
-        description = str(row.get("Description", ""))
+        description = str(row.get("Description", "")).strip()
         amount = row.get("Amount", 0)
         invoice_number = row.get("Invoice Number", f"Row {idx+1}")
 
