@@ -52,7 +52,7 @@ if uploaded_file:
     retention_rate = retention_counts.divide(cohort_sizes, axis=0)
 
     st.subheader("🔥 Retention Heatmap")
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(16, 9))
     sns.heatmap(retention_rate, annot=True, fmt=".0%", cmap="YlGnBu", linewidths=0.5)
     st.pyplot(plt)
 
@@ -60,7 +60,7 @@ if uploaded_file:
     if 'Revenue' in df.columns:
         revenue_matrix = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Revenue', aggfunc='sum')
         st.subheader("💰 Cohort Revenue Heatmap")
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(16, 9))
         sns.heatmap(revenue_matrix, annot=True, fmt=".0f", cmap="OrRd", linewidths=0.5)
         st.pyplot(plt)
 
@@ -69,7 +69,7 @@ if uploaded_file:
     churn_df = retention_rate.copy()
     churn_df = churn_df.fillna(0)
     churn_df = churn_df.applymap(lambda x: 1 - x)
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(16, 9))
     sns.heatmap(churn_df, annot=True, fmt=".0%", cmap="Reds", linewidths=0.5)
     plt.title("Churn Rate by Cohort", fontsize=14)
     st.pyplot(plt)
@@ -79,7 +79,7 @@ if uploaded_file:
         st.subheader("📈 Growth Cohort Breakdown (Avg Revenue per Customer)")
         avg_revenue_per_user = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Revenue', aggfunc='sum') / retention_counts
         avg_revenue_per_user = avg_revenue_per_user.fillna(0)
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(16, 9))
         sns.heatmap(avg_revenue_per_user, annot=True, fmt=".0f", cmap="BuGn", linewidths=0.5)
         plt.title("Average Revenue per Customer", fontsize=14)
         st.pyplot(plt)
