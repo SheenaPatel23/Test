@@ -13,7 +13,7 @@ Upload an invoice file to begin. The Chart of Accounts is preloaded from the rep
 """)
 
 # --- Load Chart of Accounts from repo ---
-coa_path = "coa_data/chart_of_accounts.csv"
+coa_path = "Invoice_Coding/coa_data/chart_of_accounts.csv"
 try:
     coa = pd.read_csv(coa_path)
 except FileNotFoundError:
