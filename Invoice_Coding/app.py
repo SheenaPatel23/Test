@@ -2,74 +2,108 @@ import streamlit as st
 import pandas as pd
 from fuzzywuzzy import process
 import pdfplumber
+from unstructured.partition.pdf import partition_pdf
+import tempfile
+import os
 
 st.set_page_config(page_title="Invoice Coding Tool", layout="wide")
 st.title("📊 Finance Invoice Coding Tool")
 
 st.markdown("""
 This app helps finance teams code invoices using the **Chart of Accounts** for **Shipsure** and **HFM**.
-
-Upload an invoice file to begin. The Chart of Accounts is preloaded from the repository.
+Upload an invoice file (Excel, CSV, or PDF), and it will suggest account mappings using fuzzy matching.
 """)
 
 # --- Load Chart of Accounts from repo ---
-coa_path = "Invoice_Coding/coa_data/chart_of_accounts.csv"
-try:
-    coa = pd.read_csv(coa_path)
-except FileNotFoundError:
-    st.error("❌ Chart of Accounts file not found. Please ensure `chart_of_accounts.csv` exists in the `coa_data/` folder.")
-    st.stop()
+@st.cache_data
+def load_coa():
+    coa_path = "coa_data/chart_of_accounts.csv"
+    return pd.read_csv(coa_path)
+
+coa = load_coa()
 
 # --- Upload Invoice File ---
-st.sidebar.header("Upload Invoice File")
-invoice_file = st.sidebar.file_uploader("Upload .xlsx, .csv, or .pdf", type=["xlsx", "csv", "pdf"])
+st.sidebar.header("Step 1: Upload Invoice File")
+invoice_file = st.sidebar.file_uploader("Invoice File (.xlsx, .csv, or .pdf)", type=["xlsx", "csv", "pdf"])
+
+invoice_data = None
 
 if invoice_file:
-    # --- Read Invoice File ---
     if invoice_file.name.endswith(".xlsx"):
-        invoices = pd.read_excel(invoice_file)
+        invoice_data = pd.read_excel(invoice_file)
     elif invoice_file.name.endswith(".csv"):
-        invoices = pd.read_csv(invoice_file)
+        invoice_data = pd.read_csv(invoice_file)
     elif invoice_file.name.endswith(".pdf"):
-        with pdfplumber.open(invoice_file) as pdf:
-            text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
-        st.subheader("📄 Extracted PDF Text")
-        st.text_area("Invoice Content", text, height=300)
-        invoices = pd.DataFrame([{
-            "Invoice Number": "PDF001",
-            "Description": text[:100],
-            "Amount": 0.0
-        }])
+        st.sidebar.subheader("PDF Parsing Method")
+        parse_method = st.sidebar.radio("Select method", ["pdfplumber (basic)", "Unstructured.io (ML-based)"])
+        if parse_method == "pdfplumber (basic)":
+            with pdfplumber.open(invoice_file) as pdf:
+                all_tables = []
+                for page in pdf.pages:
+                    tables = page.extract_tables()
+                    for table in tables:
+                        df = pd.DataFrame(table[1:], columns=table[0])
+                        all_tables.append(df)
+                if all_tables:
+                    invoice_data = pd.concat(all_tables, ignore_index=True)
+                else:
+                    st.warning("No tables found using pdfplumber.")
+        else:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(invoice_file.read())
+                tmp_path = tmp_file.name
+            elements = partition_pdf(filename=tmp_path)
+            os.remove(tmp_path)
+            tables = [el for el in elements if el.category == "Table"]
+            if tables:
+                invoice_data = tables[0].to_dataframe()
+            else:
+                st.warning("No tables found using Unstructured.io.")
 
+# --- Display Uploaded Content ---
+if invoice_data is not None:
     st.subheader("📄 Uploaded Invoices")
-    st.dataframe(invoices, use_container_width=True)
+    st.dataframe(invoice_data, use_container_width=True)
 
-    st.subheader("📘 Chart of Accounts (Preloaded)")
+    st.subheader("📘 Chart of Accounts")
     st.dataframe(coa, use_container_width=True)
+
+    # Normalize columns
+    invoice_data.columns = [col.lower().strip() for col in invoice_data.columns]
+    rename_map = {
+        'invoice no': 'Invoice Number',
+        'desc': 'Description',
+        'amount ($)': 'Amount',
+        'total': 'Amount',
+        'description': 'Description',
+        'amount': 'Amount'
+    }
+    invoice_data.rename(columns=rename_map, inplace=True)
+
+    for col in ['Description', 'Amount']:
+        if col not in invoice_data.columns:
+            invoice_data[col] = ""
 
     st.markdown("---")
     st.subheader("🔍 Invoice Coding Suggestions")
-
-    coded_invoices = invoices.copy()
 
     def suggest_accounts(description, coa_df, top_n=3):
         choices = coa_df['Shipsure Account Description'].fillna("").tolist()
         results = process.extract(description, choices, limit=top_n)
         return results
 
-    account_mapping = []
-    for idx, row in invoices.iterrows():
-        st.markdown(f"**Invoice {row.get('Invoice Number', idx+1)} - {row.get('Description', '')}**")
+    coded = []
+    for idx, row in invoice_data.iterrows():
+        st.markdown(f"**Invoice {row.get('Invoice Number', f'INV{idx+1}')}** - {row.get('Description', '')}")
         suggestions = suggest_accounts(str(row.get("Description", "")), coa)
         selected = st.selectbox(
-            f"Select account for invoice {row.get('Invoice Number', idx+1)}:",
-            options=[s[0] for s in suggestions],
-            index=0,
-            key=f"select_{idx}"
+            f"Select account for invoice {row.get('Invoice Number', f'INV{idx+1}')}:", 
+            [s[0] for s in suggestions], 
+            index=0, key=f"select_{idx}"
         )
         coa_row = coa[coa['Shipsure Account Description'] == selected].iloc[0]
-        account_mapping.append({
-            "Invoice Number": row.get("Invoice Number", ""),
+        coded.append({
+            "Invoice Number": row.get("Invoice Number", f"INV{idx+1}"),
             "Description": row.get("Description", ""),
             "Amount": row.get("Amount", 0),
             "Mapped Account": selected,
@@ -78,17 +112,13 @@ if invoice_file:
             "HFM Description": coa_row.get("HFM Account Description", "")
         })
 
-    result_df = pd.DataFrame(account_mapping)
+    result_df = pd.DataFrame(coded)
     st.markdown("---")
     st.subheader("✅ Final Coded Invoices")
     st.dataframe(result_df, use_container_width=True)
 
-    csv = result_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Coded Invoices",
-        data=csv,
-        file_name="coded_invoices.csv",
-        mime="text/csv"
-    )
+    csv = result_df.to_csv(index=False).encode("utf-8")
+    st.download_button("📥 Download Coded Invoices", csv, "coded_invoices.csv", "text/csv")
+
 else:
     st.info("Please upload an invoice file to begin.")
