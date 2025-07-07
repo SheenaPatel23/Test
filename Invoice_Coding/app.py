@@ -16,7 +16,7 @@ Upload an invoice file (Excel, CSV, or PDF), and it will suggest account mapping
 # --- Load Chart of Accounts from repo ---
 @st.cache_data
 def load_coa():
-    coa_path = "coa_data/chart_of_accounts.csv"
+    coa_path = "Invoice_Coding/coa_data/chart_of_accounts.csv"
     return pd.read_csv(coa_path)
 
 coa = load_coa()
