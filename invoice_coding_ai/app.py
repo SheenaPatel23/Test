@@ -1,4 +1,4 @@
-import os
+import os 
 import streamlit as st
 import pandas as pd
 import requests
@@ -72,7 +72,7 @@ Chart of Accounts:
 {coa_sample}
 """
 
-    # === Call Groq API ===
+    # === Call Groq API with improved error handling ===
     try:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -87,11 +87,16 @@ Chart of Accounts:
             }
         )
         result = response.json()
-        ai_output = result["choices"][0]["message"]["content"]
 
-        # === Display Result ===
-        st.subheader("📥 AI-Coded Invoice Output")
-        st.markdown(f"```markdown\n{ai_output}\n```")
+        if response.status_code != 200:
+            st.error(f"Groq API Error {response.status_code}: {result}")
+        elif "choices" in result:
+            ai_output = result["choices"][0]["message"]["content"]
+            st.subheader("📥 AI-Coded Invoice Output")
+            st.markdown(f"```markdown\n{ai_output}\n```")
+        else:
+            st.error("Unexpected response format from Groq API.")
+            st.json(result)
 
     except Exception as e:
         st.error(f"API call failed: {e}")
@@ -132,8 +137,15 @@ User Question:
                 }
             )
             q_result = q_response.json()
-            answer = q_result["choices"][0]["message"]["content"]
-            st.markdown(f"```markdown\n{answer}\n```")
+
+            if q_response.status_code != 200:
+                st.error(f"Groq API Error {q_response.status_code}: {q_result}")
+            elif "choices" in q_result:
+                answer = q_result["choices"][0]["message"]["content"]
+                st.markdown(f"```markdown\n{answer}\n```")
+            else:
+                st.error("Unexpected response format from Groq API.")
+                st.json(q_result)
 
         except Exception as e:
             st.error(f"Q&A failed: {e}")
