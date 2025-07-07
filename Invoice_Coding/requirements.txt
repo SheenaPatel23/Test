@@ -5,3 +5,6 @@ pdfplumber
 fuzzywuzzy
 python-Levenshtein
 unstructured[pdf]
+PyMuPDF
+tabulate
+groq
