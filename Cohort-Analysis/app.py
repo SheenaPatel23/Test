@@ -66,9 +66,7 @@ if uploaded_file:
 
     # === Churn Report ===
     st.subheader("📉 Customer Churn Report")
-    churn_df = retention_rate.copy()
-    churn_df = churn_df.fillna(0)
-    churn_df = churn_df.applymap(lambda x: 1 - x)
+    churn_df = retention_rate.copy().fillna(0).applymap(lambda x: 1 - x)
     plt.figure(figsize=(16, 9))
     sns.heatmap(churn_df, annot=True, fmt=".0%", cmap="Reds", linewidths=0.5)
     plt.title("Churn Rate by Cohort", fontsize=14)
@@ -77,7 +75,7 @@ if uploaded_file:
     # === Growth Cohort Breakdown ===
     if 'Revenue' in df.columns:
         st.subheader("📈 Growth Cohort Breakdown (Avg Revenue per Customer)")
-        avg_revenue_per_user = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Revenue', aggfunc='sum') / retention_counts
+        avg_revenue_per_user = revenue_matrix / retention_counts
         avg_revenue_per_user = avg_revenue_per_user.fillna(0)
         plt.figure(figsize=(16, 9))
         sns.heatmap(avg_revenue_per_user, annot=True, fmt=".0f", cmap="BuGn", linewidths=0.5)
@@ -96,7 +94,6 @@ if uploaded_file:
         if 'Revenue' in df.columns:
             revenue_matrix.to_excel(writer, sheet_name='Revenue')
             avg_revenue_per_user.to_excel(writer, sheet_name='Avg Revenue/User')
-        writer.save()
     st.download_button("⬇️ Download Cohort Matrices (Excel)", data=excel_buffer.getvalue(), file_name="cohort_analysis.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     # === AI Commentary Section ===
