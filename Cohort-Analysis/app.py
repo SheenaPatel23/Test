@@ -56,24 +56,16 @@ if uploaded_file:
     sns.heatmap(retention_rate, annot=True, fmt=".0%", cmap="YlGnBu", linewidths=0.5)
     st.pyplot(plt)
 
-    # === Revenue Heatmap ===
+    # === Revenue + Avg Revenue Cohort ===
+    avg_revenue_per_user = None  # <- Fix: Define before use
+
     if 'Revenue' in df.columns:
-        revenue_matrix = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Revenue', aggfunc='sum')
         st.subheader("💰 Cohort Revenue Heatmap")
+        revenue_matrix = df.pivot_table(index='CohortMonth', columns='CohortIndex', values='Revenue', aggfunc='sum')
         plt.figure(figsize=(16, 9))
         sns.heatmap(revenue_matrix, annot=True, fmt=".0f", cmap="OrRd", linewidths=0.5)
         st.pyplot(plt)
 
-    # === Churn Report ===
-    st.subheader("📉 Customer Churn Report")
-    churn_df = retention_rate.copy().fillna(0).applymap(lambda x: 1 - x)
-    plt.figure(figsize=(16, 9))
-    sns.heatmap(churn_df, annot=True, fmt=".0%", cmap="Reds", linewidths=0.5)
-    plt.title("Churn Rate by Cohort", fontsize=14)
-    st.pyplot(plt)
-
-    # === Growth Cohort Breakdown ===
-    if 'Revenue' in df.columns:
         st.subheader("📈 Growth Cohort Breakdown (Avg Revenue per Customer)")
         avg_revenue_per_user = revenue_matrix / retention_counts
         avg_revenue_per_user = avg_revenue_per_user.fillna(0)
@@ -81,6 +73,15 @@ if uploaded_file:
         sns.heatmap(avg_revenue_per_user, annot=True, fmt=".0f", cmap="BuGn", linewidths=0.5)
         plt.title("Average Revenue per Customer", fontsize=14)
         st.pyplot(plt)
+
+    # === Churn Report ===
+    st.subheader("📉 Customer Churn Report")
+    churn_df = retention_rate.copy().fillna(0)
+    churn_df = churn_df.applymap(lambda x: 1 - x)
+    plt.figure(figsize=(16, 9))
+    sns.heatmap(churn_df, annot=True, fmt=".0%", cmap="Reds", linewidths=0.5)
+    plt.title("Churn Rate by Cohort", fontsize=14)
+    st.pyplot(plt)
 
     # === Export Options ===
     st.subheader("📥 Download Export Files")
@@ -109,7 +110,7 @@ Churn Rate (Sample):
 {churn_df.head().to_string(index=True)}
 
 Average Revenue per User (Sample):
-{avg_revenue_per_user.head().to_string(index=True)}
+{avg_revenue_per_user.head().to_string(index=True) if avg_revenue_per_user is not None else 'No Revenue data available.'}
 """
         client = Groq(api_key=GROQ_API_KEY)
         response = client.chat.completions.create(
