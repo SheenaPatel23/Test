@@ -11,14 +11,14 @@ COA_URL = "https://raw.githubusercontent.com/SheenaPatel23/Test/main/invoice_cod
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 # === App title ===
-st.title("🧾 Invoice Coding AI with COA (Preloaded from GitHub)")
-st.markdown("Upload your **invoice (CSV, Excel, PDF)** to get **AI-based coding recommendations** using the Chart of Accounts from GitHub.")
+st.title("🧾 Invoice Coding AI with COA (Preloaded)")
+st.markdown("Upload your **invoice (CSV, Excel, PDF)** to get **AI-based coding recommendations** using the Chart of Accounts.")
 
 # === Load Chart of Accounts from GitHub ===
 try:
     coa_df = pd.read_excel(COA_URL)
     st.subheader("📘 Preloaded Chart of Accounts")
-    st.dataframe(coa_df.head(10))
+    st.dataframe(coa_df.head(5000))
 except Exception as e:
     st.error(f"Failed to load Chart of Accounts from GitHub: {e}")
     st.stop()
@@ -50,7 +50,7 @@ if invoice_file:
 ai_output = ""
 
 if (df is not None or pdf_text) and st.button("🔍 Generate AI Coding Recommendation"):
-    invoice_data = df.head(10).to_markdown(index=False) if df is not None else pdf_text[:3000]
+    invoice_data = df.head(5000).to_markdown(index=False) if df is not None else pdf_text[:3000]
     coa_sample = coa_df[['Shipsure Account Description', 'Shipsure Account Number']].dropna().head(20).to_markdown(index=False)
 
     prompt = f"""
