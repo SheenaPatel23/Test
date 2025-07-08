@@ -13,3 +13,4 @@ seaborn
 groq
 python-dotenv
 openai
+xlsxwriter
