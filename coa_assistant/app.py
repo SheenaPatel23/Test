@@ -18,9 +18,15 @@ def load_data(uploaded_file=None):
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
     else:
-        df = pd.read_csv("data/chart_of_accounts.csv")
+        default_path = "data/chart_of_accounts.csv"
+        if os.path.exists(default_path):
+            df = pd.read_csv(default_path)
+        else:
+            st.warning("No default Chart of Accounts file found. Please upload a CSV file.")
+            return pd.DataFrame()  # Return empty dataframe to avoid crash
     df['combined'] = df['Shipsure Account Description'] + " - " + df['HFM Account Description']
     return df
+
 
 # === Embed data using sentence transformers ===
 @st.cache_resource
