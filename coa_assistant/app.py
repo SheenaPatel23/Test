@@ -1,16 +1,19 @@
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss
 import datetime
-import os
-import llama_cpp
+import requests
 
-# Config
+# === Config ===
 LOG_FILE = "data/query_log.csv"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL_NAME = "mistralai/mistral-7b-instruct"
+OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]  # Secure in Streamlit Cloud
 
-# Load Chart of Accounts
+# === Load Chart of Accounts ===
 def load_data(uploaded_file=None):
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
@@ -19,7 +22,7 @@ def load_data(uploaded_file=None):
     df['combined'] = df['Shipsure Account Description'] + " - " + df['HFM Account Description']
     return df
 
-# Embed data using sentence transformers
+# === Embed data using sentence transformers ===
 @st.cache_resource
 def embed_data(df):
     model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -28,7 +31,7 @@ def embed_data(df):
     index.add(np.array(embeddings))
     return model, index, embeddings
 
-# Log query
+# === Log query and feedback ===
 def log_query(query, feedback, top_match):
     timestamp = datetime.datetime.now().isoformat()
     os.makedirs("data", exist_ok=True)
@@ -43,17 +46,27 @@ def log_query(query, feedback, top_match):
     else:
         log_df.to_csv(LOG_FILE, index=False)
 
-# Local LLM inference (llama-cpp)
-def ask_llama3(prompt):
-    llm = llama_cpp.Llama(model_path="models/llama-3-8b-instruct.Q4_K_M.gguf")
-    response = llm(prompt=prompt, max_tokens=256, stop=["\n"])
-    return response["choices"][0]["text"].strip()
+# === Call OpenRouter LLM ===
+def ask_openrouter(prompt):
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": "You are a finance assistant helping users choose chart of account codes."},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 300,
+        "temperature": 0.7,
+    }
+    response = requests.post(API_URL, headers=headers, json=body)
+    return response.json()["choices"][0]["message"]["content"].strip()
 
-# UI
-st.title("📘 Chart of Accounts Assistant")
-st.markdown("Upload your CoA file or use the default one. Then ask where to book an invoice!")
-
-uploaded_file = st.file_uploader("Upload Chart of Accounts CSV", type=["csv"])
+# === Streamlit UI ===
+st.title("📘 Chart of Accounts Assistant (API-based)")
+uploaded_file = st.file_uploader("Upload your Chart of Accounts CSV", type=["csv"])
 df = load_data(uploaded_file)
 model, index, embeddings = embed_data(df)
 
@@ -74,17 +87,23 @@ if query:
             - **HFM Number:** `{row['HFM Account Number']}`
             """)
 
-    top_match = df.iloc[I[0][0]]['combined']
+    top_matches = [df.iloc[i]['combined'] for i in I[0]]
+    joined_matches = "\\n".join(top_matches)
+    llama_prompt = f"""User query: '{query}'
 
-    # Ask llama3 for final recommendation
-    with st.expander("🤖 LLM Reasoning (llama3)"):
-        llama_prompt = f"You are a finance assistant. Given the user query: '{query}', and these account options: {df['combined'].tolist()}, suggest the best chart of account match and why."
-        llama_response = ask_llama3(llama_prompt)
-        st.markdown(llama_response)
+Here are potential Chart of Account options:
+{joined_matches}
 
-    # Feedback
+Based on the options above, recommend the best matching chart of account and explain why."""
+    
+    with st.expander("🤖 LLM Suggestion (via OpenRouter)"):
+        try:
+            response = ask_openrouter(llama_prompt)
+            st.markdown(response)
+        except Exception as e:
+            st.error(f"Failed to get LLM response: {e}")
+
     feedback = st.radio("Was this suggestion helpful?", ("Yes", "No"), horizontal=True)
     if st.button("Submit Feedback"):
-        log_query(query, feedback, top_match)
+        log_query(query, feedback, top_matches[0])
         st.success("Feedback logged. Thank you!")
-
