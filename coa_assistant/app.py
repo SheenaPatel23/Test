@@ -15,15 +15,26 @@ OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]  # Stored securely in Stre
 
 # === Load Chart of Accounts ===
 def load_data(uploaded_file=None):
+    def try_read_csv(file, encoding):
+        return pd.read_csv(file, encoding=encoding)
+
     try:
         if uploaded_file:
             st.info("📂 Uploaded file detected. Reading now...")
-            df = pd.read_csv(uploaded_file)
+            try:
+                df = try_read_csv(uploaded_file, encoding='utf-8')
+            except UnicodeDecodeError:
+                st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1...")
+                df = try_read_csv(uploaded_file, encoding='ISO-8859-1')
         else:
             default_path = "data/chart_of_accounts.csv"
             st.info(f"📁 No upload provided. Using default: `{default_path}`")
             if os.path.exists(default_path):
-                df = pd.read_csv(default_path)
+                try:
+                    df = try_read_csv(default_path, encoding='utf-8')
+                except UnicodeDecodeError:
+                    st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1...")
+                    df = try_read_csv(default_path, encoding='ISO-8859-1')
             else:
                 st.warning("⚠️ Default Chart of Accounts file not found. Please upload a CSV.")
                 return pd.DataFrame()
