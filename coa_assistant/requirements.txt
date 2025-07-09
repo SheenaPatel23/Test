@@ -1,0 +1,6 @@
+streamlit
+pandas
+openpyxl
+fuzzywuzzy[speedup]
+PyMuPDF
+python-Levenshtein
