@@ -84,7 +84,6 @@ def embed_data(df):
         st.error(f"❌ Embedding error: {e}")
         return None, None, None
 
-
 # === Log query and feedback ===
 def log_query(query, feedback, top_match):
     try:
@@ -118,13 +117,14 @@ def ask_openrouter(prompt):
         "max_tokens": 300,
         "temperature": 0.7,
     }
+
     response = requests.post(API_URL, headers=headers, json=body)
     print("Response status:", response.status_code)
     print("Response text:", response.text)
-    response.raise_for_status()  # Raise error for bad HTTP codes
+    response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"].strip()
 
-# === UI ===
+# === Streamlit UI ===
 st.title("📘 Chart of Accounts Assistant (API-based)")
 uploaded_file = st.file_uploader("Upload your Chart of Accounts CSV", type=["csv"])
 df = load_data(uploaded_file)
@@ -163,23 +163,18 @@ Here are potential Chart of Account options:
 
 Based on the options above, recommend the best matching chart of account and explain why."""
 
-with st.expander("🤖 LLM Suggestion (via OpenRouter)"):
-    try:
-        response = ask_openrouter(llama_prompt)
-        st.markdown(response)
-    except Exception as e:
-        st.error(f"Failed to get LLM response: {e}")
+        with st.expander("🤖 LLM Suggestion (via OpenRouter)"):
+            try:
+                response = ask_openrouter(llama_prompt)
+                st.markdown(response)
+            except Exception as e:
+                st.error(f"Failed to get LLM response: {e}")
 
-        # Add debug info to see API response details if available
-        import requests
-
-        # If the error is a requests HTTP error, print status and text
-        if isinstance(e, requests.exceptions.HTTPError):
-            st.text(f"HTTP Error Status Code: {e.response.status_code}")
-            st.text(f"Response Text:\n{e.response.text}")
-        else:
-            st.text("No HTTP response details available.")
-
+                if isinstance(e, requests.exceptions.HTTPError):
+                    st.text(f"HTTP Error Status Code: {e.response.status_code}")
+                    st.text(f"Response Text:\n{e.response.text}")
+                else:
+                    st.text("No HTTP response details available.")
 
         feedback = st.radio("Was this suggestion helpful?", ("Yes", "No"), horizontal=True)
         if st.button("Submit Feedback"):
