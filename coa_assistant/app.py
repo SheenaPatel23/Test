@@ -119,7 +119,9 @@ def ask_openrouter(prompt):
         "temperature": 0.7,
     }
     response = requests.post(API_URL, headers=headers, json=body)
-    response.raise_for_status()
+    print("Response status:", response.status_code)
+    print("Response text:", response.text)
+    response.raise_for_status()  # Raise error for bad HTTP codes
     return response.json()["choices"][0]["message"]["content"].strip()
 
 # === UI ===
