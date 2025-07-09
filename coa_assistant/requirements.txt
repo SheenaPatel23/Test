@@ -1,6 +1,5 @@
 streamlit
 pandas
-openpyxl
-fuzzywuzzy[speedup]
-PyMuPDF
-python-Levenshtein
+sentence-transformers
+faiss-cpu
+llama-cpp-python

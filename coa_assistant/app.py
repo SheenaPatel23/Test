@@ -1,88 +1,90 @@
 import streamlit as st
 import pandas as pd
-from fuzzywuzzy import fuzz, process
-import fitz  # PyMuPDF for PDF parsing
+import numpy as np
+from sentence_transformers import SentenceTransformer
+import faiss
+import datetime
+import os
+import llama_cpp
 
-st.title("🧾 Invoice to COA Matching (Local AI-Like)")
+# Config
+LOG_FILE = "data/query_log.csv"
 
-# === Hardcoded Chart of Accounts ===
-coa_data = {
-    "Shipsure Account Description": [
-        "Office Rent",
-        "Staff Salaries",
-        "Travel Expenses",
-        "IT Software Subscriptions",
-        "Maintenance & Repairs"
-    ],
-    "Shipsure Account Number": [
-        "6101",
-        "6201",
-        "6301",
-        "6401",
-        "6501"
-    ]
-}
-coa_df = pd.DataFrame(coa_data)
-st.subheader("📘 Chart of Accounts")
-st.dataframe(coa_df)
+# Load Chart of Accounts
+def load_data(uploaded_file=None):
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_csv("data/chart_of_accounts.csv")
+    df['combined'] = df['Shipsure Account Description'] + " - " + df['HFM Account Description']
+    return df
 
-# === Upload Invoice File ===
-invoice_file = st.file_uploader("📤 Upload Invoice File (CSV, Excel, or PDF)", type=["csv", "xlsx", "pdf"])
-df = None
-pdf_text = ""
+# Embed data using sentence transformers
+@st.cache_resource
+def embed_data(df):
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    embeddings = model.encode(df['combined'].tolist(), convert_to_tensor=False)
+    index = faiss.IndexFlatL2(len(embeddings[0]))
+    index.add(np.array(embeddings))
+    return model, index, embeddings
 
-if invoice_file:
-    try:
-        if invoice_file.name.endswith(".csv"):
-            df = pd.read_csv(invoice_file)
-        elif invoice_file.name.endswith(".xlsx"):
-            df = pd.read_excel(invoice_file)
-        elif invoice_file.name.endswith(".pdf"):
-            with fitz.open(stream=invoice_file.read(), filetype="pdf") as doc:
-                pdf_text = "\n".join(page.get_text() for page in doc)
-            st.subheader("📄 Extracted PDF Text")
-            st.text_area("PDF Content", pdf_text, height=300)
-        if df is not None:
-            st.subheader("📊 Invoice Data Preview")
-            st.dataframe(df.head(10))
-    except Exception as e:
-        st.error(f"Error reading invoice file: {e}")
-        st.stop()
+# Log query
+def log_query(query, feedback, top_match):
+    timestamp = datetime.datetime.now().isoformat()
+    os.makedirs("data", exist_ok=True)
+    log_df = pd.DataFrame([{
+        "timestamp": timestamp,
+        "query": query,
+        "feedback": feedback,
+        "top_match": top_match
+    }])
+    if os.path.exists(LOG_FILE):
+        log_df.to_csv(LOG_FILE, mode='a', header=False, index=False)
+    else:
+        log_df.to_csv(LOG_FILE, index=False)
 
-# === Local Matching Logic ===
-if df is not None and st.button("🔍 Match Invoices to COA"):
-    # Detect relevant column
-    desc_col = None
-    for col in df.columns:
-        if "description" in col.lower():
-            desc_col = col
-            break
+# Local LLM inference (llama-cpp)
+def ask_llama3(prompt):
+    llm = llama_cpp.Llama(model_path="models/llama-3-8b-instruct.Q4_K_M.gguf")
+    response = llm(prompt=prompt, max_tokens=256, stop=["\n"])
+    return response["choices"][0]["text"].strip()
 
-    if not desc_col:
-        st.error("No column found with 'description' in its name.")
-        st.stop()
+# UI
+st.title("📘 Chart of Accounts Assistant")
+st.markdown("Upload your CoA file or use the default one. Then ask where to book an invoice!")
 
-    results = []
+uploaded_file = st.file_uploader("Upload Chart of Accounts CSV", type=["csv"])
+df = load_data(uploaded_file)
+model, index, embeddings = embed_data(df)
 
-    for line in df[desc_col].dropna():
-        best_match, score = process.extractOne(
-            line,
-            coa_df["Shipsure Account Description"],
-            scorer=fuzz.token_sort_ratio
-        )
-        coa_row = coa_df[coa_df["Shipsure Account Description"] == best_match].iloc[0]
-        results.append({
-            "Invoice Line Description": line,
-            "Suggested COA Code": coa_row["Shipsure Account Number"],
-            "COA Description": best_match,
-            "Confidence Score": score,
-            "Notes": "Auto-matched using fuzzy logic"
-        })
+query = st.text_input("🧾 Describe the invoice or transaction")
 
-    match_df = pd.DataFrame(results)
-    st.subheader("✅ Matched Results")
-    st.dataframe(match_df)
+if query:
+    q_embedding = model.encode([query])
+    D, I = index.search(np.array(q_embedding), k=3)
 
-    # Optional: download
-    csv = match_df.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇️ Download Matched Results", data=csv, file_name="invoice_matched.csv", mime="text/csv")
+    st.subheader("🔍 Top Matches:")
+    for i in I[0]:
+        row = df.iloc[i]
+        with st.expander(f"{row['Shipsure Account Description']} (#{row['Shipsure Account Number']})"):
+            st.markdown(f"""
+            - **Shipsure Account Description:** {row['Shipsure Account Description']}
+            - **Shipsure Account Number:** `{row['Shipsure Account Number']}`
+            - **HFM Description:** {row['HFM Account Description']}
+            - **HFM Number:** `{row['HFM Account Number']}`
+            """)
+
+    top_match = df.iloc[I[0][0]]['combined']
+
+    # Ask llama3 for final recommendation
+    with st.expander("🤖 LLM Reasoning (llama3)"):
+        llama_prompt = f"You are a finance assistant. Given the user query: '{query}', and these account options: {df['combined'].tolist()}, suggest the best chart of account match and why."
+        llama_response = ask_llama3(llama_prompt)
+        st.markdown(llama_response)
+
+    # Feedback
+    feedback = st.radio("Was this suggestion helpful?", ("Yes", "No"), horizontal=True)
+    if st.button("Submit Feedback"):
+        log_query(query, feedback, top_match)
+        st.success("Feedback logged. Thank you!")
+
