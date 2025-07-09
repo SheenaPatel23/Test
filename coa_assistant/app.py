@@ -163,12 +163,23 @@ Here are potential Chart of Account options:
 
 Based on the options above, recommend the best matching chart of account and explain why."""
 
-        with st.expander("🤖 LLM Suggestion (via OpenRouter)"):
-            try:
-                response = ask_openrouter(llama_prompt)
-                st.markdown(response)
-            except Exception as e:
-                st.error(f"❌ Failed to get LLM response: {e}")
+with st.expander("🤖 LLM Suggestion (via OpenRouter)"):
+    try:
+        response = ask_openrouter(llama_prompt)
+        st.markdown(response)
+    except Exception as e:
+        st.error(f"Failed to get LLM response: {e}")
+
+        # Add debug info to see API response details if available
+        import requests
+
+        # If the error is a requests HTTP error, print status and text
+        if isinstance(e, requests.exceptions.HTTPError):
+            st.text(f"HTTP Error Status Code: {e.response.status_code}")
+            st.text(f"Response Text:\n{e.response.text}")
+        else:
+            st.text("No HTTP response details available.")
+
 
         feedback = st.radio("Was this suggestion helpful?", ("Yes", "No"), horizontal=True)
         if st.button("Submit Feedback"):
