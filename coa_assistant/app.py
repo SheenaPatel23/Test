@@ -118,11 +118,29 @@ def ask_openrouter(prompt):
         "temperature": 0.7,
     }
 
-    response = requests.post(API_URL, headers=headers, json=body)
-    print("Response status:", response.status_code)
-    print("Response text:", response.text)
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"].strip()
+    try:
+        response = requests.post(API_URL, headers=headers, json=body)
+        if response.status_code != 200:
+            st.error(f"HTTP Error: {response.status_code}")
+            st.text(f"Response Text:\n{response.text}")
+            return "❌ API call failed."
+        
+        if not response.text:
+            st.error("❌ Empty response from OpenRouter API.")
+            return "❌ No content received from model."
+
+        json_response = response.json()
+        return json_response["choices"][0]["message"]["content"].strip()
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Request failed: {e}")
+        return "❌ Request error."
+
+    except ValueError as e:
+        st.error("❌ Failed to parse JSON.")
+        st.text(f"Raw response:\n{response.text}")
+        return "❌ JSON parse error."
+
 
 # === Streamlit UI ===
 st.title("📘 Chart of Accounts Assistant (API-based)")
