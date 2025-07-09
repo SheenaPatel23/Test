@@ -55,21 +55,35 @@ def load_data(uploaded_file=None):
 # === Embed data ===
 @st.cache_resource
 def embed_data(df):
-    if df.empty or 'combined' not in df.columns:
-        st.warning("⚠️ No valid data to embed.")
-        return None, None, None
-
     try:
-        st.info("📌 Embedding account descriptions...")
+        if df.empty or 'combined' not in df.columns:
+            st.warning("⚠️ No data to embed.")
+            return None, None, None
+
+        st.info("🔄 Generating sentence embeddings...")
         model = SentenceTransformer('all-MiniLM-L6-v2')
-        embeddings = model.encode(df['combined'].tolist(), convert_to_tensor=False)
+        sentences = df['combined'].fillna("").astype(str).tolist()
+
+        embeddings = model.encode(sentences, convert_to_tensor=False)
+
+        if not isinstance(embeddings, (list, np.ndarray)):
+            st.error("❌ Embeddings are not in expected format.")
+            return None, None, None
+
+        if len(embeddings) == 0 or not hasattr(embeddings[0], '__len__'):
+            st.error("❌ Embedding results are invalid or empty.")
+            return None, None, None
+
         index = faiss.IndexFlatL2(len(embeddings[0]))
         index.add(np.array(embeddings))
+
         st.success("✅ Embedding complete.")
         return model, index, embeddings
+
     except Exception as e:
         st.error(f"❌ Embedding error: {e}")
         return None, None, None
+
 
 # === Log query and feedback ===
 def log_query(query, feedback, top_match):
