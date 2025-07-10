@@ -15,7 +15,7 @@ if user_input:
             }
 
             payload = {
-                "model": "mistralai/mistral-7b-instruct",
+                "model": "gryphe/mythomist-7b",
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": user_input}
