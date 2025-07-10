@@ -1,13 +1,13 @@
 import streamlit as st
 import requests
 
-st.title("🔍 Test OpenRouter with Mistral")
+st.title("🔍 Test OpenRouter with Auto Model")
 
 # Get prompt from user
 user_input = st.text_input("Enter your message:", "What is the capital of France?")
 
 if user_input:
-    with st.spinner("Asking Mistral via OpenRouter..."):
+    with st.spinner("Asking OpenRouter (auto model)..."):
         try:
             headers = {
                 "Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}",
@@ -15,7 +15,7 @@ if user_input:
             }
 
             payload = {
-                "model": "gryphe/mythomist-7b",
+                "model": "openrouter/auto",  # ✅ Let OpenRouter choose the best available model
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": user_input}
@@ -28,7 +28,7 @@ if user_input:
 
             if response.status_code == 200:
                 reply = response.json()["choices"][0]["message"]["content"]
-                st.success("💬 Mistral says:")
+                st.success("💬 Response:")
                 st.markdown(reply)
             else:
                 st.error(f"❌ Status: {response.status_code}")
