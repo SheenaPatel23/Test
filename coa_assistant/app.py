@@ -9,7 +9,7 @@ import requests
 
 # === Config ===
 LOG_FILE = "data/query_log.csv"
-API_URL = "https://openrouter.ai/v1/chat/completions"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL_NAME = "mistralai/mistral-7b-instruct:free"
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]  # Stored securely in Streamlit secrets
 
