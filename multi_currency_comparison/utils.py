@@ -1,14 +1,13 @@
 import requests
-import os
+import streamlit as st
 
-# You can also store this securely in Streamlit Community Cloud via secrets
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # Or replace with your key directly (not recommended in prod)
+GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "google/gemma-2-9b-it:free"
 
 def ask_llm(user_question: str, fx_summary: str) -> str:
     if not GROQ_API_KEY:
-        return "⚠️ Missing GROQ_API_KEY. Please set it as an environment variable or in secrets."
+        return "⚠️ Missing GROQ_API_KEY in Streamlit secrets."
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
