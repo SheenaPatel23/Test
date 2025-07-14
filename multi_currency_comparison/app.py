@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import requests
+import yfinance as yf
 from datetime import datetime, timedelta
 import plotly.express as px
 import matplotlib.pyplot as plt
@@ -16,9 +16,9 @@ with st.sidebar:
 
     from_currency = st.selectbox("Base Currency", ["USD", "EUR", "GBP", "JPY", "INR"], index=0)
     to_currencies = st.multiselect("Compare Against", ["EUR", "GBP", "JPY", "INR", "AUD", "CAD", "CHF", "CNY"], default=["EUR", "JPY"])
-    
+
     date_range_option = st.selectbox("Select Range", ["1 Day", "1 Week", "30 Days", "60 Days", "90 Days", "1 Year", "2 Years", "5 Years"])
-    
+
     chart_type = st.radio("Chart Library", ["Plotly", "Matplotlib"])
     normalize = st.checkbox("Normalize Values for Comparison")
 
@@ -46,56 +46,67 @@ if not to_currencies:
     st.warning("Please select at least one target currency.")
     st.stop()
 
-# --- Fetch FX Data ---
-symbols_param = ",".join(to_currencies)
-hist_url = (
-    f"https://api.exchangerate.host/timeseries"
-    f"?start_date={start_date.strftime('%Y-%m-%d')}"
-    f"&end_date={end_date.strftime('%Y-%m-%d')}"
-    f"&base={from_currency}&symbols={symbols_param}"
-)
+# --- Fetch FX Data using yfinance ---
+@st.cache_data(ttl=3600)
+def fetch_yf_fx_data(base, targets, start, end):
+    df_all = pd.DataFrame()
+    for tgt in targets:
+        if tgt == base:
+            continue
+        # Yahoo Finance FX ticker format examples:
+        # For USD to EUR: EURUSD=X (quote is EUR/USD)
+        # We want base as 'from_currency' and target as 'to_currency'
+        # Yahoo Finance ticker: TARGET + BASE + "=X" (so invert)
+        # So if base=USD, target=EUR, ticker is EURUSD=X, which is EUR/USD, to get USD/EUR invert it
 
-# Debug: Show the full API request URL
-st.code(f"📡 FX API Request URL:\n{hist_url}", language="text")
+        ticker = f"{tgt}{base}=X"
+        fx_data = yf.download(ticker, start=start, end=end)
+        if fx_data.empty:
+            st.warning(f"No data for pair {base}/{tgt} (Ticker: {ticker})")
+            continue
+        # Price is for tgt/base, so invert to get base/tgt rate:
+        fx_data['Close'] = 1 / fx_data['Close']
+        fx_data['Open'] = 1 / fx_data['Open']
+        fx_data['High'] = 1 / fx_data['High']
+        fx_data['Low'] = 1 / fx_data['Low']
+        # Volume usually 0 for FX, ignore
 
-hist_response = requests.get(hist_url)
-hist_data = hist_response.json()
+        df_all[tgt] = fx_data['Close']
+    df_all.index = pd.to_datetime(df_all.index)
+    df_all.sort_index(inplace=True)
+    return df_all
 
-# Debug: Show raw API response
-st.json(hist_data)
+with st.spinner("Fetching FX data from Yahoo Finance..."):
+    df = fetch_yf_fx_data(from_currency, to_currencies, start_date, end_date)
 
-if hist_data.get("success") and hist_data.get("rates"):
-    df = pd.DataFrame(hist_data["rates"]).T
-    df.index = pd.to_datetime(df.index)
-    df.sort_index(inplace=True)
-
-    if normalize:
-        df = df / df.iloc[0] * 100
-
-    st.subheader("📈 FX Rate Trends")
-
-    if chart_type == "Plotly":
-        fig = px.line(df, x=df.index, y=df.columns, labels={"value": "Rate", "index": "Date"}, title="FX Rate Over Time")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        plt.figure(figsize=(10, 4))
-        for col in df.columns:
-            plt.plot(df.index, df[col], label=col)
-        plt.xlabel("Date")
-        plt.ylabel("Rate" if not normalize else "Normalized (%)")
-        plt.title("FX Rate Over Time")
-        plt.legend()
-        st.pyplot(plt)
-
-    # --- Summarize FX Data for LLM ---
-    fx_summary = df.tail(5).to_string()
-    st.subheader("🤖 Ask AI about FX Trends")
-
-    user_question = st.text_input("What would you like to ask?", placeholder="e.g., Which currency gained the most recently?")
-    if user_question:
-        with st.spinner("Asking AI..."):
-            llm_response = ask_llm(user_question, fx_summary)
-            st.markdown(llm_response)
-else:
+if df.empty:
     st.warning("⚠️ No FX data available for this selection. Please check your currency selections and time range.")
-    st.error(f"Debug Info: Success = {hist_data.get('success')}, Rates = {bool(hist_data.get('rates'))}")
+    st.stop()
+
+if normalize:
+    df = df / df.iloc[0] * 100
+
+st.subheader("📈 FX Rate Trends")
+
+if chart_type == "Plotly":
+    fig = px.line(df, x=df.index, y=df.columns, labels={"value": "Rate", "index": "Date"}, title=f"FX Rate Over Time ({from_currency} base)")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    plt.figure(figsize=(10, 4))
+    for col in df.columns:
+        plt.plot(df.index, df[col], label=col)
+    plt.xlabel("Date")
+    plt.ylabel("Rate" if not normalize else "Normalized (%)")
+    plt.title(f"FX Rate Over Time ({from_currency} base)")
+    plt.legend()
+    st.pyplot(plt)
+
+# --- Summarize FX Data for LLM ---
+fx_summary = df.tail(5).to_string()
+st.subheader("🤖 Ask AI about FX Trends")
+
+user_question = st.text_input("What would you like to ask?", placeholder="e.g., Which currency gained the most recently?")
+if user_question:
+    with st.spinner("Asking AI..."):
+        llm_response = ask_llm(user_question, fx_summary)
+        st.markdown(llm_response)
