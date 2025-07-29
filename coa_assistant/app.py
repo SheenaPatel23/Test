@@ -14,9 +14,13 @@ MODEL_NAME = "google/gemma-2-9b-it:free"  # ✅ Updated model
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]  # Stored securely in Streamlit secrets
 
 # === Load Chart of Accounts ===
+# === Load Chart of Accounts ===
 def load_data(uploaded_file=None):
-    def try_read_csv(file_path, encoding):
-        return pd.read_csv(file_path, encoding=encoding)
+    def try_read_csv(source, encoding):
+        return pd.read_csv(source, encoding=encoding)
+
+    # Replace this with your actual CSV URL
+    csv_url = "https://raw.githubusercontent.com/SheenaPatel23/Test/main/coa_assistant/data/chart_of_accounts.csv"
 
     try:
         if uploaded_file:
@@ -27,20 +31,12 @@ def load_data(uploaded_file=None):
                 st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1...")
                 df = try_read_csv(uploaded_file, encoding='ISO-8859-1')
         else:
-            # 🔍 Construct full path to default CSV relative to this file
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            default_path = os.path.join(script_dir, "data", "chart_of_accounts.csv")
-
-            if os.path.exists(default_path):
-                st.info(f"📁 No upload. Using default CSV from: `{default_path}`")
-                try:
-                    df = try_read_csv(default_path, encoding='utf-8')
-                except UnicodeDecodeError:
-                    st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1...")
-                    df = try_read_csv(default_path, encoding='ISO-8859-1')
-            else:
-                st.warning(f"⚠️ Default file not found at: `{default_path}`")
-                return pd.DataFrame()
+            st.info(f"🌐 No upload. Using default CSV from: {csv_url}")
+            try:
+                df = try_read_csv(csv_url, encoding='utf-8')
+            except UnicodeDecodeError:
+                st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1 from URL...")
+                df = try_read_csv(csv_url, encoding='ISO-8859-1')
 
         required_cols = ['Shipsure Account Description', 'HFM Account Description']
         if not all(col in df.columns for col in required_cols):
@@ -52,9 +48,8 @@ def load_data(uploaded_file=None):
         return df
 
     except Exception as e:
-        st.error(f"❌ Error loading file: {e}")
+        st.error(f"❌ Error loading CSV: {e}")
         return pd.DataFrame()
-
 
 # === Embed data ===
 @st.cache_resource
