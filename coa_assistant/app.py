@@ -6,6 +6,7 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import datetime
 import requests
+import io
 
 # === Page Config ===
 st.set_page_config(page_title="Chart of Accounts Assistant", page_icon="📘", layout="wide")
