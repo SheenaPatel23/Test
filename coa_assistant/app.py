@@ -13,9 +13,9 @@ st.set_page_config(page_title="Chart of Accounts Assistant", page_icon="📘", l
 
 # === V.Group Branding Header ===
 st.markdown("""
-    <div style='background-color:#002f5f;padding:1.5rem;border-radius:8px;margin-bottom:1rem'>
+    <div style='background-color:#052e2b;padding:1.5rem;border-radius:8px;margin-bottom:1rem'>
         <h1 style='color:#ffffff;margin:0;'>V.Group | Chart of Accounts Assistant</h1>
-        <p style='color:#ffffff;margin:0;'>Helping you pick the right account code with AI assistance</p>
+        <p style='color:#68da6a;margin:0;'>Helping you pick the right account code with AI assistance</p>
     </div>
 """, unsafe_allow_html=True)
 
