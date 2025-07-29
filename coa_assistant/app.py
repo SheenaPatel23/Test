@@ -141,7 +141,7 @@ def ask_openrouter(prompt):
 
 
 # === Streamlit UI ===
-st.title("📘 Chart of Accounts Assistant (API-based)")
+st.title("📘 Chart of Accounts Assistant ")
 uploaded_file = st.file_uploader("Upload your Chart of Accounts CSV", type=["csv"])
 df = load_data(uploaded_file)
 
@@ -179,7 +179,7 @@ Here are potential Chart of Account options:
 
 Based on the options above, recommend the best matching chart of account and explain why."""
 
-        with st.expander("🤖 LLM Suggestion (via OpenRouter)"):
+        with st.expander("🤖 LLM Suggestion "):
             try:
                 response = ask_openrouter(llama_prompt)
                 st.markdown(response)
