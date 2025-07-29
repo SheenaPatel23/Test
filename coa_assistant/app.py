@@ -93,31 +93,41 @@ if model is None:
     st.stop()
 
 # === Chart of Accounts Table View with Filters and Export ===
+
 with st.expander("📊 View and Explore Chart of Accounts"):
 
-    st.markdown("Use the filter below to explore specific accounts or descriptions:")
+    st.markdown("Use the filter below to search across multiple fields:")
 
-    # Specific column filter
-    col_filter = st.text_input("🔍 Filter by Shipsure Account Description (e.g., 'Bunkers', 'Insurance')")
+    # Multi-column text filter
+    search_query = st.text_input("🔍 Search (e.g., 'Bunkers', 'Insurance', '600001')")
 
-    # Filter DataFrame based on input
-    if col_filter:
-        filtered_df = df[df['Shipsure Account Description'].astype(str).str.contains(col_filter, case=False)]
+    # Define which columns to search
+    search_columns = ['Shipsure Account Description', 'HFM Account Description', 'Shipsure Account Number']
+
+    # Apply multi-column filter
+    if search_query:
+        mask = np.column_stack([
+            df[col].astype(str).str.contains(search_query, case=False, na=False)
+            for col in search_columns
+        ]).any(axis=1)
+        filtered_df = df[mask]
         st.markdown(f"🔎 Showing {len(filtered_df)} matching records.")
     else:
         filtered_df = df
 
-    # Display interactive table
+    # Display filtered table
     st.data_editor(filtered_df, use_container_width=True, height=350, disabled=True)
 
     # Prepare download options
     csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+
     excel_buffer = io.BytesIO()
     with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
         filtered_df.to_excel(writer, index=False, sheet_name='ChartOfAccounts')
-        writer.save()
-    excel_data = excel_buffer.getvalue()
+    excel_buffer.seek(0)
+    excel_data = excel_buffer.read()
 
+    # Download buttons
     st.download_button("⬇️ Download CSV", csv_data, file_name="chart_of_accounts.csv", mime="text/csv")
     st.download_button("⬇️ Download Excel", excel_data, file_name="chart_of_accounts.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
