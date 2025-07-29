@@ -7,98 +7,47 @@ import faiss
 import datetime
 import requests
 
-# === Config ===
+# === Page Config ===
+st.set_page_config(page_title="Chart of Accounts Assistant", page_icon="📘", layout="wide")
+
+# === V.Group Branding Header ===
+st.markdown("""
+    <div style='background-color:#002f5f;padding:1.5rem;border-radius:8px;margin-bottom:1rem'>
+        <h1 style='color:#ffffff;margin:0;'>V.Group | Chart of Accounts Assistant</h1>
+        <p style='color:#ffffff;margin:0;'>Helping you pick the right account code with AI assistance</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# === Constants ===
 LOG_FILE = "data/query_log.csv"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL_NAME = "google/gemma-2-9b-it:free"  # ✅ Updated model
-OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]  # Stored securely in Streamlit secrets
+MODEL_NAME = "google/gemma-2-9b-it:free"
+OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+CSV_URL = "https://raw.githubusercontent.com/SheenaPatel23/Test/main/coa_assistant/data/chart_of_accounts.csv"
 
 # === Load Chart of Accounts ===
-def load_data(uploaded_file=None):
-    def try_read_csv(source, encoding):
-        return pd.read_csv(source, encoding=encoding)
-
-    # Replace this with your actual CSV URL
-    csv_url = "https://raw.githubusercontent.com/SheenaPatel23/Test/main/coa_assistant/data/chart_of_accounts.csv"
-
+def load_data():
     try:
-        if uploaded_file:
-            st.info("📂 Uploaded file detected. Reading now...")
-            try:
-                df = try_read_csv(uploaded_file, encoding='utf-8')
-            except UnicodeDecodeError:
-                st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1...")
-                df = try_read_csv(uploaded_file, encoding='ISO-8859-1')
-        else:
-            st.info(f"🌐 No upload. Using default CSV from: {csv_url}")
-            try:
-                df = try_read_csv(csv_url, encoding='utf-8')
-            except UnicodeDecodeError:
-                st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1 from URL...")
-                df = try_read_csv(csv_url, encoding='ISO-8859-1')
-
-        required_cols = ['Shipsure Account Description', 'HFM Account Description']
-        if not all(col in df.columns for col in required_cols):
-            st.error(f"❌ CSV must contain columns: {required_cols}")
-            return pd.DataFrame()
-
+        df = pd.read_csv(CSV_URL, encoding='utf-8')
         df['combined'] = df['Shipsure Account Description'] + " - " + df['HFM Account Description']
-        st.success("✅ Chart of Accounts loaded successfully.")
         return df
-
     except Exception as e:
-        st.error(f"❌ Error loading CSV: {e}")
+        st.error(f"❌ Error loading Chart of Accounts: {e}")
         return pd.DataFrame()
 
 # === Embed data ===
 @st.cache_resource
 def embed_data(df):
     try:
-        if df.empty or 'combined' not in df.columns:
-            st.warning("⚠️ No data to embed.")
-            return None, None, None
-
-        st.info("🔄 Generating sentence embeddings...")
         model = SentenceTransformer('all-MiniLM-L6-v2')
         sentences = df['combined'].fillna("").astype(str).tolist()
-
         embeddings = model.encode(sentences, convert_to_tensor=False)
-
-        if not isinstance(embeddings, (list, np.ndarray)):
-            st.error("❌ Embeddings are not in expected format.")
-            return None, None, None
-
-        if len(embeddings) == 0 or not hasattr(embeddings[0], '__len__'):
-            st.error("❌ Embedding results are invalid or empty.")
-            return None, None, None
-
         index = faiss.IndexFlatL2(len(embeddings[0]))
         index.add(np.array(embeddings))
-
-        st.success("✅ Embedding complete.")
         return model, index, embeddings
-
     except Exception as e:
         st.error(f"❌ Embedding error: {e}")
         return None, None, None
-
-# === Log query and feedback ===
-def log_query(query, feedback, top_match):
-    try:
-        timestamp = datetime.datetime.now().isoformat()
-        os.makedirs("data", exist_ok=True)
-        log_df = pd.DataFrame([{
-            "timestamp": timestamp,
-            "query": query,
-            "feedback": feedback,
-            "top_match": top_match
-        }])
-        if os.path.exists(LOG_FILE):
-            log_df.to_csv(LOG_FILE, mode='a', header=False, index=False)
-        else:
-            log_df.to_csv(LOG_FILE, index=False)
-    except Exception as e:
-        st.error(f"❌ Failed to log feedback: {e}")
 
 # === Call OpenRouter LLM ===
 def ask_openrouter(prompt):
@@ -115,87 +64,93 @@ def ask_openrouter(prompt):
         "max_tokens": 300,
         "temperature": 0.7,
     }
-
     try:
         response = requests.post(API_URL, headers=headers, json=body)
-        if response.status_code != 200:
-            st.error(f"HTTP Error: {response.status_code}")
-            st.text(f"Response Text:\n{response.text}")
-            return "❌ API call failed."
-        
-        if not response.text:
-            st.error("❌ Empty response from OpenRouter API.")
-            return "❌ No content received from model."
+        return response.json()["choices"][0]["message"]["content"].strip()
+    except:
+        return "❌ Failed to get response."
 
-        json_response = response.json()
-        return json_response["choices"][0]["message"]["content"].strip()
+# === Log user query ===
+def log_query(query, feedback, top_match):
+    try:
+        os.makedirs("data", exist_ok=True)
+        timestamp = datetime.datetime.now().isoformat()
+        log = pd.DataFrame([{
+            "timestamp": timestamp, "query": query,
+            "feedback": feedback, "top_match": top_match
+        }])
+        log.to_csv(LOG_FILE, mode='a', header=not os.path.exists(LOG_FILE), index=False)
+    except Exception as e:
+        st.warning(f"⚠️ Feedback not logged: {e}")
 
-    except requests.exceptions.RequestException as e:
-        st.error(f"Request failed: {e}")
-        return "❌ Request error."
-
-    except ValueError as e:
-        st.error("❌ Failed to parse JSON.")
-        st.text(f"Raw response:\n{response.text}")
-        return "❌ JSON parse error."
-
-
-# === Streamlit UI ===
-st.title("📘 Chart of Accounts Assistant ")
-uploaded_file = st.file_uploader("Upload your Chart of Accounts CSV", type=["csv"])
-df = load_data(uploaded_file)
-
+# === Load and Embed Data ===
+df = load_data()
 if df.empty:
     st.stop()
-
 model, index, embeddings = embed_data(df)
-if model is None or index is None:
+if model is None:
     st.stop()
 
-query = st.text_input("🧾 Describe the invoice or transaction")
+# === Chart of Accounts Preview with Search and Export ===
+with st.expander("📊 View and Explore Chart of Accounts"):
+    st.markdown("Use the search box below to filter the chart of accounts:")
+    search_query = st.text_input("🔍 Filter by keyword (e.g. 'bunkers', 'depreciation', etc.)")
 
+    if search_query:
+        filtered_df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+        st.data_editor(filtered_df, use_container_width=True, height=300, disabled=True)
+        st.markdown(f"🔎 Showing {len(filtered_df)} matching records.")
+    else:
+        st.data_editor(df, use_container_width=True, height=300, disabled=True)
+
+    # Download button
+    csv_download = df.to_csv(index=False).encode('utf-8')
+    st.download_button("⬇️ Download full Chart of Accounts CSV", csv_download, file_name="chart_of_accounts.csv", mime="text/csv")
+
+
+# === Query Input ===
+query = st.text_input("🧾 Describe the invoice or transaction you'd like to code:")
 if query:
     try:
         q_embedding = model.encode([query])
         D, I = index.search(np.array(q_embedding), k=3)
 
-        st.subheader("🔍 Top Matches:")
+        st.subheader("🔍 Top Matches")
+        top_matches = []
         for i in I[0]:
             row = df.iloc[i]
+            top_matches.append(row['combined'])
             with st.expander(f"{row['Shipsure Account Description']} (#{row['Shipsure Account Number']})"):
                 st.markdown(f"""
-                - **Shipsure Account Description:** {row['Shipsure Account Description']}
                 - **Shipsure Account Number:** `{row['Shipsure Account Number']}`
-                - **HFM Description:** {row['HFM Account Description']}
-                - **HFM Number:** `{row['HFM Account Number']}`
+                - **Shipsure Account Description:** {row['Shipsure Account Description']}
+                - **HFM Account Number:** `{row['HFM Account Number']}`
+                - **HFM Account Description:** {row['HFM Account Description']}
                 """)
 
-        top_matches = [df.iloc[i]['combined'] for i in I[0]]
-        joined_matches = "\n".join(top_matches)
-        llama_prompt = f"""User query: '{query}'
+        # === LLM Recommendation ===
+        prompt = f"""User query: '{query}'
 
 Here are potential Chart of Account options:
-{joined_matches}
+{chr(10).join(top_matches)}
 
-Based on the options above, recommend the best matching chart of account and explain why."""
+Based on these, recommend the best match and explain why."""
+        with st.expander("🤖 View LLM Recommendation"):
+            suggestion = ask_openrouter(prompt)
+            st.markdown(suggestion)
 
-        with st.expander("🤖 LLM Suggestion "):
-            try:
-                response = ask_openrouter(llama_prompt)
-                st.markdown(response)
-            except Exception as e:
-                st.error(f"Failed to get LLM response: {e}")
-
-                if isinstance(e, requests.exceptions.HTTPError):
-                    st.text(f"HTTP Error Status Code: {e.response.status_code}")
-                    st.text(f"Response Text:\n{e.response.text}")
-                else:
-                    st.text("No HTTP response details available.")
-
-        feedback = st.radio("Was this suggestion helpful?", ("Yes", "No"), horizontal=True)
+        feedback = st.radio("Was this recommendation helpful?", ("Yes", "No"), horizontal=True)
         if st.button("Submit Feedback"):
             log_query(query, feedback, top_matches[0])
-            st.success("✅ Feedback logged. Thank you!")
+            st.success("✅ Thanks! Your feedback was logged.")
 
     except Exception as e:
-        st.error(f"❌ Error during query processing: {e}")
+        st.error(f"❌ Failed to process query: {e}")
+
+# === Footer Branding ===
+st.markdown("""
+    <hr style="margin-top: 3rem; margin-bottom: 0.5rem;" />
+    <div style='text-align:center; color: gray; font-size: small'>
+        Powered by V.Group · Built with ❤️ using Streamlit and OpenRouter AI
+    </div>
+""", unsafe_allow_html=True)
