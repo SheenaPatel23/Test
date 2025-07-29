@@ -14,7 +14,6 @@ MODEL_NAME = "google/gemma-2-9b-it:free"  # ✅ Updated model
 OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]  # Stored securely in Streamlit secrets
 
 # === Load Chart of Accounts ===
-# === Load Chart of Accounts ===
 def load_data(uploaded_file=None):
     def try_read_csv(source, encoding):
         return pd.read_csv(source, encoding=encoding)
