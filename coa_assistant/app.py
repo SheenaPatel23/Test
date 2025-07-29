@@ -27,18 +27,19 @@ def load_data(uploaded_file=None):
                 st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1...")
                 df = try_read_csv(uploaded_file, encoding='ISO-8859-1')
         else:
-            # Use script-relative path to load the default CSV
-            base_path = os.path.dirname(__file__)
-            default_path = os.path.join(base_path, "data", "chart_of_accounts.csv")
+            # 🔍 Construct full path to default CSV relative to this file
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            default_path = os.path.join(script_dir, "data", "chart_of_accounts.csv")
+
             if os.path.exists(default_path):
-                st.info(f"📁 No file uploaded. Using default CSV from: `{default_path}`")
+                st.info(f"📁 No upload. Using default CSV from: `{default_path}`")
                 try:
                     df = try_read_csv(default_path, encoding='utf-8')
                 except UnicodeDecodeError:
                     st.warning("⚠️ UTF-8 decode failed. Trying ISO-8859-1...")
                     df = try_read_csv(default_path, encoding='ISO-8859-1')
             else:
-                st.warning("⚠️ Default Chart of Accounts file not found. Please upload a CSV.")
+                st.warning(f"⚠️ Default file not found at: `{default_path}`")
                 return pd.DataFrame()
 
         required_cols = ['Shipsure Account Description', 'HFM Account Description']
