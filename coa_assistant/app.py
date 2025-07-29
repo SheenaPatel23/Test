@@ -91,22 +91,34 @@ model, index, embeddings = embed_data(df)
 if model is None:
     st.stop()
 
-# === Chart of Accounts Preview with Search and Export ===
+# === Chart of Accounts Table View with Filters and Export ===
 with st.expander("📊 View and Explore Chart of Accounts"):
-    st.markdown("Use the search box below to filter the chart of accounts:")
-    search_query = st.text_input("🔍 Filter by keyword (e.g. 'bunkers', 'depreciation', etc.)")
 
-    if search_query:
-        filtered_df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
-        st.data_editor(filtered_df, use_container_width=True, height=300, disabled=True)
+    st.markdown("Use the filter below to explore specific accounts or descriptions:")
+
+    # Specific column filter
+    col_filter = st.text_input("🔍 Filter by Shipsure Account Description (e.g., 'Bunkers', 'Insurance')")
+
+    # Filter DataFrame based on input
+    if col_filter:
+        filtered_df = df[df['Shipsure Account Description'].astype(str).str.contains(col_filter, case=False)]
         st.markdown(f"🔎 Showing {len(filtered_df)} matching records.")
     else:
-        st.data_editor(df, use_container_width=True, height=300, disabled=True)
+        filtered_df = df
 
-    # Download button
-    csv_download = df.to_csv(index=False).encode('utf-8')
-    st.download_button("⬇️ Download full Chart of Accounts CSV", csv_download, file_name="chart_of_accounts.csv", mime="text/csv")
+    # Display interactive table
+    st.data_editor(filtered_df, use_container_width=True, height=350, disabled=True)
 
+    # Prepare download options
+    csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+        filtered_df.to_excel(writer, index=False, sheet_name='ChartOfAccounts')
+        writer.save()
+    excel_data = excel_buffer.getvalue()
+
+    st.download_button("⬇️ Download CSV", csv_data, file_name="chart_of_accounts.csv", mime="text/csv")
+    st.download_button("⬇️ Download Excel", excel_data, file_name="chart_of_accounts.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # === Query Input ===
 query = st.text_input("🧾 Describe the invoice or transaction you'd like to code:")
