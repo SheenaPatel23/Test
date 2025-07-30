@@ -11,11 +11,14 @@ import io
 # === Page Config ===
 st.set_page_config(page_title="Chart of Accounts Assistant", page_icon="📘", layout="wide")
 
-# === V.Group Branding Header ===
+# === V.Group Branding Header with Logo ===
 st.markdown("""
-    <div style='background-color:#052e2b;padding:1.5rem;border-radius:8px;margin-bottom:1rem'>
-        <h1 style='color:#ffffff;margin:0;'>V.Group - Finance | Chart of Accounts Assistant</h1>
-        <p style='color:#68da6a;margin:0;'>Helping you pick the right account code with AI assistance</p>
+    <div style='background-color:#052e2b;padding:1rem 2rem;border-radius:8px;margin-bottom:2rem;display:flex;align-items:center;'>
+        <img src="https://vgrouplimited.com/wp-content/uploads/2023/03/vgroup-logo-white.svg" alt="V.Group Logo" style="height:50px;margin-right:20px;">
+        <div>
+            <h1 style='color:#ffffff;margin:0;font-size:1.8rem;'>V.Group - Finance | Chart of Accounts Assistant</h1>
+            <p style='color:#68da6a;margin:0;font-size:1rem;'>Helping you pick the right account code with AI assistance</p>
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -92,8 +95,7 @@ model, index, embeddings = embed_data(df)
 if model is None:
     st.stop()
 
-# === Chart of Accounts Table View with Filters and Export ===
-
+# === Chart of Accounts Table View ===
 st.subheader("📊 Chart of Accounts Explorer")
 st.markdown("Filter Chart of Accounts using the dropdowns below:")
 
@@ -194,10 +196,11 @@ Based on these, recommend the best match and explain why."""
     except Exception as e:
         st.error(f"❌ Failed to process query: {e}")
 
-# === Footer Branding ===
+# === V.Group Footer ===
 st.markdown("""
-    <hr style="margin-top: 3rem; margin-bottom: 0.5rem;" />
-    <div style='text-align:center; color: gray; font-size: small'>
-        Powered by V.Group · Built by Finance Data & Analytics using Streamlit and OpenRouter AI
+    <hr style="margin-top:3rem;margin-bottom:1rem;" />
+    <div style='text-align:center; color:#666; font-size:0.9rem;'>
+        <p>© V.Group 2025 · All Rights Reserved</p>
+        <p>Built with ❤️ using Streamlit & OpenRouter</p>
     </div>
 """, unsafe_allow_html=True)
