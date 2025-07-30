@@ -9,7 +9,7 @@ import requests
 import io
 
 # === Page Config ===
-st.set_page_config(page_title="Chart of Accounts Assistant", page_icon="📘", layout="wide")
+st.set_page_config(page_title="Chart of Accounts Assistant", page_icon="🧾", layout="wide")
 
 # === V.Group Branding Header with Logo ===
 st.markdown("""
@@ -96,7 +96,7 @@ if model is None:
     st.stop()
 
 # === Chart of Accounts Table View ===
-st.subheader("📊 Chart of Accounts Explorer")
+st.subheader("🧮 Chart of Accounts Explorer")
 st.markdown("Filter Chart of Accounts using the dropdowns below:")
 
 # --- Dropdown Filters ---
