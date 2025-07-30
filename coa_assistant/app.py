@@ -162,26 +162,24 @@ query = st.text_input("🧾 Describe the invoice or transaction you'd like to co
 if query:
     try:
         q_embedding = model.encode([query])
-        D, I = index.search(np.array(q_embedding), k=3)
+        D, I = index.search(np.array(q_embedding), k=len(df))  # search full dataset
 
-        st.subheader("🔍 Top Matches")
-        top_matches = []
-        for i in I[0]:
-            row = df.iloc[i]
-            top_matches.append(row['combined'])
-            with st.expander(f"{row['Shipsure Account Description']} (#{row['Shipsure Account Number']})"):
-                st.markdown(f"""
-                - **Shipsure Account Number:** `{row['Shipsure Account Number']}`
-                - **Shipsure Account Description:** {row['Shipsure Account Description']}
-                - **HFM Account Number:** `{row['HFM Account Number']}`
-                - **HFM Account Description:** {row['HFM Account Description']}
-                """)
+        st.subheader("🔍 All Account Matches (Ranked by Relevance)")
+
+        match_df = df.iloc[I[0]].copy()
+        match_df["Similarity Score"] = D[0]
+        match_df["Relevance"] = (1 - match_df["Similarity Score"]).round(3)
+        match_df = match_df.drop(columns=["combined"])
+        match_df = match_df[["Relevance"] + [col for col in match_df.columns if col != "Relevance"]]
+
+        st.dataframe(match_df, use_container_width=True, height=450)
 
         # === LLM Recommendation ===
+        top_5_combined = df.iloc[I[0][:5]]["combined"].tolist()
         prompt = f"""User query: '{query}'
 
 Here are potential Chart of Account options:
-{chr(10).join(top_matches)}
+{chr(10).join(top_5_combined)}
 
 Based on these, recommend the best match and explain why."""
         with st.expander("🤖 View LLM Recommendation"):
@@ -190,9 +188,8 @@ Based on these, recommend the best match and explain why."""
 
         feedback = st.radio("Was this recommendation helpful?", ("Yes", "No"), horizontal=True)
         if st.button("Submit Feedback"):
-            log_query(query, feedback, top_matches[0])
+            log_query(query, feedback, top_5_combined[0])
             st.success("✅ Thanks! Your feedback was logged.")
-
     except Exception as e:
         st.error(f"❌ Failed to process query: {e}")
 
