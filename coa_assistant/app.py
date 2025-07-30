@@ -13,11 +13,11 @@ st.set_page_config(page_title="Chart of Accounts Assistant", page_icon="📘", l
 
 # === V.Group Branding Header with Logo ===
 st.markdown("""
-    <div style='background-color:#052e2b;padding:1rem 2rem;border-radius:8px;margin-bottom:2rem;display:flex;align-items:center;'>
-        <img src="https://vgrouplimited.com/wp-content/uploads/2023/03/vgroup-logo-white.svg" alt="V.Group Logo" style="height:50px;margin-right:20px;">
+    <div style='display: flex; align-items: center; background-color:#052e2b; padding: 1rem; border-radius: 8px; margin-bottom: 1rem'>
+        <img src="https://vgrouplimited.com/assets/img/logo.png" alt="V Group Logo" style="height:50px; margin-right: 20px;">
         <div>
-            <h1 style='color:#ffffff;margin:0;font-size:1.8rem;'>V.Group - Finance | Chart of Accounts Assistant</h1>
-            <p style='color:#68da6a;margin:0;font-size:1rem;'>Helping you pick the right account code with AI assistance</p>
+            <h1 style='color:#ffffff; margin: 0;'>V.Group - Finance | Chart of Accounts Assistant</h1>
+            <p style='color:#68da6a; margin: 0;'>Helping you pick the right account code with AI assistance</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
