@@ -95,7 +95,6 @@ if model is None:
 # === Chart of Accounts Table View with Filters and Export ===
 
 st.subheader("📊 Chart of Accounts Explorer")
-
 st.markdown("Filter Chart of Accounts using the dropdowns below:")
 
 # --- Dropdown Filters ---
@@ -119,13 +118,10 @@ account_number = st.selectbox(
 
 # --- Apply Filters ---
 filtered_df = df.copy()
-
 if ship_desc != "All":
     filtered_df = filtered_df[filtered_df['Shipsure Account Description'] == ship_desc]
-
 if hfm_desc != "All":
     filtered_df = filtered_df[filtered_df['HFM Account Description'] == hfm_desc]
-
 if account_number != "All":
     filtered_df = filtered_df[filtered_df['Shipsure Account Number'].astype(str) == account_number]
 
@@ -202,6 +198,6 @@ Based on these, recommend the best match and explain why."""
 st.markdown("""
     <hr style="margin-top: 3rem; margin-bottom: 0.5rem;" />
     <div style='text-align:center; color: gray; font-size: small'>
-        Powered by V.Group · Built with ❤️ using Streamlit and OpenRouter AI
+        Powered by V.Group · Built by Finance Data & Analytics using Streamlit and OpenRouter AI
     </div>
 """, unsafe_allow_html=True)
