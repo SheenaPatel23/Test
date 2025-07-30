@@ -94,42 +94,70 @@ if model is None:
 
 # === Chart of Accounts Table View with Filters and Export ===
 
-with st.expander("📊 View and Explore Chart of Accounts"):
+st.subheader("📊 Chart of Accounts Explorer")
 
-    st.markdown("Use the filter below to search across multiple fields:")
+st.markdown("Filter Chart of Accounts using the dropdowns below:")
 
-    # Multi-column text filter
-    search_query = st.text_input("🔍 Search (e.g., 'Bunkers', 'Insurance', '600001')")
+# --- Dropdown Filters ---
+ship_desc = st.selectbox(
+    "📌 Shipsure Account Description",
+    options=["All"] + sorted(df['Shipsure Account Description'].dropna().unique().tolist()),
+    index=0
+)
 
-    # Define which columns to search
-    search_columns = ['Shipsure Account Description', 'HFM Account Description', 'Shipsure Account Number']
+hfm_desc = st.selectbox(
+    "📌 HFM Account Description",
+    options=["All"] + sorted(df['HFM Account Description'].dropna().unique().tolist()),
+    index=0
+)
 
-    # Apply multi-column filter
-    if search_query:
-        mask = np.column_stack([
-            df[col].astype(str).str.contains(search_query, case=False, na=False)
-            for col in search_columns
-        ]).any(axis=1)
-        filtered_df = df[mask]
-        st.markdown(f"🔎 Showing {len(filtered_df)} matching records.")
-    else:
-        filtered_df = df
+account_number = st.selectbox(
+    "📌 Shipsure Account Number",
+    options=["All"] + sorted(df['Shipsure Account Number'].dropna().astype(str).unique().tolist()),
+    index=0
+)
 
-    # Display filtered table
-    st.data_editor(filtered_df, use_container_width=True, height=350, disabled=True)
+# --- Apply Filters ---
+filtered_df = df.copy()
 
-    # Prepare download options
-    csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+if ship_desc != "All":
+    filtered_df = filtered_df[filtered_df['Shipsure Account Description'] == ship_desc]
 
-    excel_buffer = io.BytesIO()
-    with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-        filtered_df.to_excel(writer, index=False, sheet_name='ChartOfAccounts')
-    excel_buffer.seek(0)
-    excel_data = excel_buffer.read()
+if hfm_desc != "All":
+    filtered_df = filtered_df[filtered_df['HFM Account Description'] == hfm_desc]
 
-    # Download buttons
-    st.download_button("⬇️ Download CSV", csv_data, file_name="chart_of_accounts.csv", mime="text/csv")
-    st.download_button("⬇️ Download Excel", excel_data, file_name="chart_of_accounts.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+if account_number != "All":
+    filtered_df = filtered_df[filtered_df['Shipsure Account Number'].astype(str) == account_number]
+
+st.markdown(f"🔎 Showing **{len(filtered_df)}** matching records.")
+
+# --- Styling ---
+def highlight_keywords(val):
+    if isinstance(val, str):
+        if 'revenue' in val.lower():
+            return 'background-color: #d4edda'  # light green
+        elif 'expense' in val.lower():
+            return 'background-color: #f8d7da'  # light red
+    return ''
+
+styled_df = filtered_df.style \
+    .applymap(highlight_keywords, subset=['HFM Account Description']) \
+    .set_properties(**{'border': '1px solid #ddd', 'font-size': '14px'}) \
+    .hide(axis="index")
+
+st.dataframe(styled_df, use_container_width=True, height=350)
+
+# --- Downloads ---
+csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+
+excel_buffer = io.BytesIO()
+with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+    filtered_df.to_excel(writer, index=False, sheet_name='ChartOfAccounts')
+excel_buffer.seek(0)
+excel_data = excel_buffer.read()
+
+st.download_button("⬇️ Download CSV", csv_data, file_name="chart_of_accounts.csv", mime="text/csv")
+st.download_button("⬇️ Download Excel", excel_data, file_name="chart_of_accounts.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # === Query Input ===
 query = st.text_input("🧾 Describe the invoice or transaction you'd like to code:")
