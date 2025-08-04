@@ -37,7 +37,7 @@ with st.sidebar:
     to_currencies = st.multiselect(
         "Compare Against", 
         ["EUR", "GBP", "JPY", "INR", "AUD", "CAD", "CHF", "CNY"],
-        default=["EUR", "JPY"]
+        default=["EUR", "GBP"]
     )
 
     date_range_option = st.selectbox("Time Range", ["1 Day", "1 Week", "30 Days", "60 Days", "90 Days", "1 Year", "2 Years", "5 Years"])
@@ -64,12 +64,14 @@ if not to_currencies:
     st.stop()
 
 fx_data = {}
+
 for target_currency in to_currencies:
     pair = f"{from_currency}{target_currency}=X"
-    try:
-        data = yf.download(pair, start=start_date, end=end_date)
-        if not data.empty:
-            fx_data[target_currency] = data["Close"]
+    data = yf.download(pair, start=start_date, end=end_date)
+    
+    # Only add if it's a proper Series with multiple values
+    if not data.empty and "Close" in data.columns and len(data["Close"].dropna()) > 1:
+        fx_data[target_currency] = data["Close"]
     except Exception:
         continue
 
