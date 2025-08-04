@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 import requests
 
@@ -8,34 +7,30 @@ API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 def ask_llm(question: str, context: str) -> str:
     if not OPENROUTER_API_KEY:
-        return "Missing OpenRouter API Key."
-
-    prompt = (
-        "You are a financial assistant specialized in FX rates. "
-        "Analyze the following recent FX data:\n\n"
-        f"{context}\n\n"
-        "Answer this user question clearly and concisely:\n"
-        f"{question}\n"
-    )
+        return "❌ Missing OpenRouter API Key."
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
     }
 
+    messages = [
+        {"role": "system", "content": "You are a helpful financial assistant that analyzes FX rate data."},
+        {"role": "user", "content": f"Recent FX data:\n{context}\n\nQuestion:\n{question}"}
+    ]
+
     payload = {
         "model": MODEL_NAME,
-        "messages": [
-            {"role": "system", "content": "You are a financial assistant."},
-            {"role": "user", "content": prompt}
-        ],
+        "messages": messages,
         "temperature": 0.3,
         "max_tokens": 300
     }
 
     try:
-        response = requests.post(API_URL, headers=headers, json=payload)
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
+    except requests.exceptions.RequestException as e:
+        return f"❌ Network error: {e}"
     except Exception as e:
-        return f"Error contacting LLM: {e}"
+        return f"❌ Unexpected error: {e}"
