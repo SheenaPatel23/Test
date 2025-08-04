@@ -72,10 +72,8 @@ for target_currency in to_currencies:
     # Only add if it's a proper Series with multiple values
     if not data.empty and "Close" in data.columns and len(data["Close"].dropna()) > 1:
         fx_data[target_currency] = data["Close"]
-    except Exception:
-        continue
-
-if not fx_data:
+    
+    if not fx_data:
     st.error("⚠️ No FX data available for this selection.")
     st.stop()
 
