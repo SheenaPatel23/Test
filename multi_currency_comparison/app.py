@@ -16,7 +16,7 @@ st.markdown(
 
 # ---------------------- SIDEBAR ----------------------
 with st.sidebar:
-    st.image("https://vgrouplimited.com/wp-content/uploads/2022/06/vgroup-logo.svg", use_column_width=True)
+    st.image("https://vgrouplimited.com/wp-content/uploads/2022/06/vgroup-logo.svg", use_container_width=True)
     st.header("🔧 Controls")
 
     from_currency = st.selectbox("Base Currency", ["USD", "EUR", "GBP", "JPY", "INR"], index=0)
