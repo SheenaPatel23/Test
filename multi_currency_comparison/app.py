@@ -21,7 +21,7 @@ with st.sidebar:
 
     from_currency = st.selectbox("Base Currency", ["USD", "EUR", "GBP", "JPY", "INR"], index=0)
     to_currencies = st.multiselect("Compare Against", ["EUR", "GBP", "JPY", "INR", "AUD", "CAD", "CHF", "CNY", "SGD", "PLN", "AED", "PHP"], default=["EUR", "GBP"])
-    date_range_option = st.selectbox("Select Range", ["1 Week", "30 Days", "60 Days", "90 Days", "1 Year", "2 Years", "5 Years"], default=["1 Year"])
+    date_range_option = st.selectbox("Select Range", ["1 Week", "30 Days", "60 Days", "90 Days", "1 Year", "2 Years", "5 Years"])
     chart_type = st.radio("Chart Type", ["Plotly", "Matplotlib"])
     normalize = st.checkbox("Normalize Rates for Comparison")
 
