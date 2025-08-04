@@ -20,8 +20,15 @@ with st.sidebar:
     st.header("🔧 Controls")
 
     from_currency = st.selectbox("Base Currency", ["USD", "EUR", "GBP", "JPY", "INR"], index=0)
-    to_currencies = st.multiselect("Compare Against", ["EUR", "GBP", "JPY", "INR", "AUD", "CAD", "CHF", "CNY"], default=["EUR", "GBP"])
-    date_range_option = st.selectbox("Select Range", ["1 Week", "30 Days", "60 Days", "90 Days", "1 Year", "2 Years", "5 Years"])
+    to_currencies = st.multiselect(
+        "Compare Against",
+        ["EUR", "GBP", "JPY", "INR", "AUD", "CAD", "CHF", "CNY"],
+        default=["EUR", "GBP"]
+    )
+    date_range_option = st.selectbox(
+        "Select Range",
+        ["1 Week", "30 Days", "60 Days", "90 Days", "1 Year", "2 Years", "5 Years"]
+    )
     chart_type = st.radio("Chart Type", ["Plotly", "Matplotlib"])
     normalize = st.checkbox("Normalize Rates for Comparison")
 
@@ -48,18 +55,27 @@ if not to_currencies:
 def fetch_fx_timeseries(from_cur, to_cur, start, end):
     symbol = f"{from_cur}{to_cur}=X"
     data = yf.download(symbol, start=start, end=end)
-    return data["Close"].rename(to_cur)
+    if data.empty or "Close" not in data.columns:
+        raise ValueError(f"No valid data for symbol {symbol}")
+    # Return a Series named by the target currency
+    return pd.Series(data["Close"], name=to_cur)
 
 fx_data = {}
 for to_cur in to_currencies:
     try:
-        fx_data[to_cur] = fetch_fx_timeseries(from_currency, to_cur, start_date, end_date)
+        series = fetch_fx_timeseries(from_currency, to_cur, start_date, end_date)
+        fx_data[to_cur] = series
     except Exception as e:
         st.error(f"Error fetching data for {to_cur}: {e}")
 
 if not fx_data:
     st.warning("No FX data available for the selected currencies.")
     st.stop()
+
+# Debug: Show types and samples of data
+for k, v in fx_data.items():
+    st.write(f"Data type for {k}: {type(v)}")
+    st.write(v.head())
 
 df = pd.concat(fx_data.values(), axis=1)
 df.columns = fx_data.keys()
