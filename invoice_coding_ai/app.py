@@ -18,7 +18,7 @@ st.markdown("Upload your **invoice (CSV, Excel, PDF)** to get **AI-based coding 
 try:
     coa_df = pd.read_excel(COA_URL)
     st.subheader("📘 Preloaded Chart of Accounts")
-    st.dataframe(coa_df.head(5000))
+    st.dataframe(coa_df.head(2000))
 except Exception as e:
     st.error(f"Failed to load Chart of Accounts from GitHub: {e}")
     st.stop()
